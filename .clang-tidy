@@ -1,0 +1,11 @@
+Checks: >
+  clang-diagnostic-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  modernize-*,
+  cppcoreguidelines-*
+WarningsAsErrors: "clang-diagnostic-*,bugprone-*,performance-*"
+HeaderFilterRegex: "src/.*"
+FormatStyle: file

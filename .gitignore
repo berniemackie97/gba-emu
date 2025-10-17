@@ -1,0 +1,55 @@
+# ---- Build & CMake
+/build/
+/out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# ---- IDE/editor
+.vscode/
+.idea/
+.vs/
+*.user
+*.VC.db
+.DS_Store
+Thumbs.db
+
+# ---- Windows binaries & MSVC intermediates
+*.obj
+*.iobj
+*.pdb
+*.ipdb
+*.ilk
+*.pch
+*.tlog
+*.exe
+*.dll
+*.lib
+
+# ---- Tooling caches & logs
+.cache/
+.ccls-cache/
+.clangd/
+*.log
+*.dmp
+
+# ---- vcpkg local outputs
+vcpkg_installed/
+vcpkg-manifest-install.log
+
+# ---- ROMs & BIOS (never commit)
+assets/**/*.gba
+assets/**/*.gb
+assets/**/*.bin
+assets/**/*.sav
+assets/**/*.srm
+assets/**/*.ips
+assets/**/*.ups
+assets/**/*.bps
+assets/gba_bios.bin
+
+# ---- Local, machine-specific
+CMakeUserPresets.json

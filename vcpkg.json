@@ -1,0 +1,7 @@
+{
+  "name": "gba-emu",
+  "version-string": "0.0.1",
+  "description": "Game Boy Advance emulator (private)",
+  "builtin-baseline": "b2c74683ecfd6a8e7d27ffb0df077f66a9339509",
+  "dependencies": ["sdl2", "gtest"]
+}

@@ -1,0 +1,29 @@
+{
+  "testPresets": [
+    {
+      "name": "ci",
+      "configurePreset": "ci"
+    }
+  ],
+  "version": 4,
+  "buildPresets": [
+    {
+      "name": "ci",
+      "configurePreset": "ci"
+    }
+  ],
+  "configurePresets": [
+    {
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+        "CMAKE_MAKE_PROGRAM": "C:\\Users\\berni\\AppData\\Local\\Microsoft\\WinGet\\Links\\ninja.exe",
+        "CMAKE_TOOLCHAIN_FILE": "C:\\Users\\berni\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
+        "CMAKE_C_COMPILER": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe"
+      },
+      "binaryDir": "/build",
+      "name": "ci",
+      "displayName": "MSVC + Ninja (pinned) + vcpkg (absolute)"
+    }
+  ]
+}
