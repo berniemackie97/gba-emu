@@ -1,1 +1,45 @@
-* text=auto eol=lf
+# Normalize text files; default to LF
+*               text=auto
+
+# --- Force LF for sources/configs/docs
+*.c             text eol=lf
+*.cc            text eol=lf
+*.cpp           text eol=lf
+*.h             text eol=lf
+*.hpp           text eol=lf
+*.inl           text eol=lf
+CMakeLists.txt  text eol=lf
+*.cmake         text eol=lf
+*.json          text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.md            text eol=lf
+*.txt           text eol=lf
+*.ps1           text eol=lf
+*.sh            text eol=lf
+
+# --- CRLF only where Windows tooling truly expects it
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+
+# --- Binary (never convert)
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.zip           binary
+*.7z            binary
+*.gz            binary
+*.dll           binary
+*.lib           binary
+*.exe           binary
+
+# --- Emulator assets (binary, never convert)
+*.gba           binary
+*.gb            binary
+*.bin           binary
+*.sav           binary
+*.srm           binary
+*.ips           binary
+*.ups           binary
+*.bps           binary
