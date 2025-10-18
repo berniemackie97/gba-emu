@@ -22,8 +22,16 @@ target_link_libraries(gba_sdl PRIVATE gba_core SDL2::SDL2 SDL2::SDL2main)
 # Tests
 enable_testing()
 find_package(GTest CONFIG REQUIRED)
-add_executable(core_tests tests/core_smoke.cpp tests/bios_load.cpp)
-target_link_libraries(core_tests PRIVATE gba_core GTest::gtest GTest::gtest_main)
-include(GoogleTest)
-gtest_discover_tests(core_tests)
+
+file(GLOB TEST_SOURCES CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
+
+foreach(test_src IN LISTS TEST_SOURCES)
+  get_filename_component(test_name "${test_src}" NAME_WE)
+  add_executable("${test_name}_test" "${test_src}")
+  target_link_libraries("${test_name}_test" PRIVATE gba_core GTest::gtest GTest::gtest_main)
+  include(GoogleTest)
+  gtest_discover_tests("${test_name}_test")
+endforeach()
+
 

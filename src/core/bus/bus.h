@@ -1,26 +1,26 @@
 // src/core/bus/bus.h
 #pragma once
-#include <cstdint>
-#include <filesystem>
 #include "core/mmu/mmu.h"
+#include <filesystem>
 
 namespace gba {
+
     class Bus {
       public:
-        // Value seen on unmapped reads (a.k.a. open-bus). Named to avoid magic numbers.
-        static constexpr std::uint8_t kOpenBus = MMU::kOpenBus;
+        // lifecycle
+        void reset() noexcept { mmu_.reset(); }
 
-        auto reset() noexcept -> void { mmu_.reset(); }
-        auto load_bios(const std::filesystem::path &path) noexcept -> bool { return mmu_.load_bios(path); }
+        // BIOS plumbing exposed for tests & future UI
+        [[nodiscard]] auto load_bios(const std::filesystem::path &file) noexcept -> bool {
+            return mmu_.load_bios(file);
+        }
 
-        [[nodiscard]] auto read8(std::uint32_t addr) const noexcept -> std::uint8_t { return mmu_.read8(addr); }
+        // byte access (delegates to MMU)
+        [[nodiscard]] auto read8(u32 addr) const noexcept -> u8 { return mmu_.read8(addr); }
+        void write8(u32 addr, u8 value) noexcept { mmu_.write8(addr, value); }
 
-        // Keep (addr, value) order to match hardware docs.
-        // Clang-tidy dislikes adjacent convertible params; suppress at this boundary.
-        auto write8(std::uint32_t addr, std::uint8_t value) noexcept -> void {
-            mmu_.write8(addr, value);
-        } // NOLINT(bugprone-easily-swappable-parameters)
       private:
         MMU mmu_{};
     };
+
 } // namespace gba
