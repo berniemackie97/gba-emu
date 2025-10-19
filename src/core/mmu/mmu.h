@@ -4,8 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <span>
-#include <sys/stat.h>
-#include <vector>
+#include "core/io/io.h"
 
 namespace gba {
 
@@ -25,7 +24,7 @@ namespace gba {
         static constexpr std::size_t IWRAM_SIZE = 0x00008000U; // 32 KiB
 
         static constexpr u32 IO_BASE = 0x04000000U;
-        static constexpr std::size_t IO_SIZE = 0x00000400U; // 1 KiB of regs (0x000..0x3FE)
+        static constexpr std::size_t IO_SIZE = IORegs::kSizeBytes; // 1 KiB of regs (0x000..0x3FE)
 
         static constexpr u32 PAL_BASE = 0x05000000U;
         static constexpr std::size_t PAL_SIZE = 0x00000400U; // 1 KiB, mirrored
@@ -68,6 +67,10 @@ namespace gba {
 
         [[nodiscard]] auto read32(u32 addr) const noexcept -> std::uint32_t;
         void write32(u32 addr, std::uint32_t value) noexcept;
+
+        // Test/system hook: set current scanline (feeds IORegs::VCOUNT)
+        void debug_set_vcount_for_tests(std::uint16_t scanline) noexcept { io_.debug_set_vcount_for_tests(scanline); }
+        void debug_set_hblank_for_tests(bool hblank) noexcept { io_.debug_set_hblank_for_tests(hblank); }
 
       private:
         // helpers
@@ -117,7 +120,7 @@ namespace gba {
         std::array<u8, BIOS_SIZE> bios_{};
         std::array<u8, EWRAM_SIZE> ewram_{};
         std::array<u8, IWRAM_SIZE> iwram_{};
-        std::array<u8, IO_SIZE> io_{}; // stubbed register space
+        IORegs io_{};
         std::array<u8, PAL_SIZE> pal_{};
         std::array<u8, VRAM_SIZE> vram_{};
         std::array<u8, OAM_SIZE> oam_{};

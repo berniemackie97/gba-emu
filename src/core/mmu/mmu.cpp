@@ -22,7 +22,7 @@ namespace gba {
         std::ranges::fill(bios_, u8{0x00});
         std::ranges::fill(ewram_, u8{0x00});
         std::ranges::fill(iwram_, u8{0x00});
-        std::ranges::fill(io_, u8{0x00});
+        io_.reset();
         std::ranges::fill(pal_, u8{0x00});
         std::ranges::fill(vram_, u8{0x00});
         std::ranges::fill(oam_, u8{0x00});
@@ -105,7 +105,8 @@ namespace gba {
 
         // I/O (stub)
         if (in(addr, IO_BASE, IO_SIZE)) {
-            return io_.at(static_cast<std::size_t>(addr - IO_BASE));
+            const u32 off = addr - IO_BASE;
+            return io_.read8(off);
         }
 
         // Palette (mirrored every 0x400 within 16 MiB)
@@ -146,7 +147,8 @@ namespace gba {
             return;
         }
         if (in(addr, IO_BASE, IO_SIZE)) {
-            io_.at(static_cast<std::size_t>(addr - IO_BASE)) = value; // stubbed regs
+            const u32 off = addr - IO_BASE;
+            io_.write8(off, value);
             return;
         }
         if (in_window(addr, PAL_BASE, kWindow16MiB)) {
