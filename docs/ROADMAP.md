@@ -1,28 +1,35 @@
 # Roadmap
 
-## Completed
+We keep the roadmap incremental and test-driven. Ship small, ship often.
 
-- Project scaffolding (CMake/Ninja/vcpkg) and presets
-- Bus façade delegating to MMU
-- MMU: 8/16/32‑bit accesses, mirroring for PAL/VRAM/OAM, open‑bus policy
-- BIOS loader (16 KiB), tests
-- Game Pak ROM mapping (read‑only) with mirrors across wait‑states and ROM size
-- Tests: mapping, width access, and cartridge mapping
+---
 
-## Next (short‑term)
+## Done / Milestones
 
-- Typed I/O register block with reset values (DISPCNT, DISPSTAT/VCOUNT, BGxCNT, TMxCNT, KEYINPUT)
-- CPU core skeleton (Thumb fetch/decode/execute loop) using Bus APIs
-- Minimal PPU Mode 0 renderer (tile BGs) and software framebuffer for SDL
-- Cartridge SRAM (8‑bit) save support
+- **CPU (Thumb) bring-up**
+  - MOV/ADD/SUB (imm8), B (imm11)
+  - LDR (literal), LDR/STR (word, imm5)
+  - NZCV flags (where defined); Thumb state assumed
+  - Unaligned word semantics implemented at the CPU layer
+  - Unit tests: `CPUThumb.MovAddSubAndBranch` and
+    `CPUThumbLoadStore.LdrLiteralThenStoreAndLoadWord`
 
-## Medium term
+---
 
-- DMA channels 0–3 (basic), timers, IRQ wiring
-- CPU: full Thumb, then ARM instruction set and timing
-- PPU: additional modes, affine, windowing, blending
+## Next
 
-## Quality & infrastructure
+- More Thumb ALU ops (logical and shifts), comparisons, condition flags polish
+- LDR/STR variants: byte/halfword; sign-extending loads
+- High-register ops and `BX` (path to ARM state switching)
+- Broaden CPU test matrix; add negative/edge cases for flags
+- Timing/pipeline model (separate from functional correctness)
+- IO: timers, DMA scaffolding, and more IO-reg tests
+- PPU slice-by-scanline simulation harness (start with mode 3 smoke tests)
 
-- CI (build + test), coverage reports
-- Trace logging toggles for CPU/PPU/DMA
+---
+
+## Later / Maybe
+
+- ARM (32‑bit) execution core, switch-on-`BX`
+- Save states; debugger; tracing hooks
+- Audio processing and sync loop

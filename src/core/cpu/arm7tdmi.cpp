@@ -164,6 +164,28 @@ namespace gba {
         // flags unaffected
     }
 
+    // 01111 LDRB Rd, [Rb, #imm5]
+    void ARM7TDMI::exec_ldr_imm_b(u16 insn) noexcept {
+        const u32 imm5 = (insn >> 6U) & 0x1FU;
+        const u32 baseReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 address = regs_.at(baseReg) + imm5;
+
+        regs_.at(destReg) = static_cast<u32>(bus_->read8(address));
+        set_nz(regs_.at(destReg)); // C/V unaffected
+    }
+
+    // 01110 STRB Rd, [Rb, #imm5]
+    void ARM7TDMI::exec_str_imm_b(u16 insn) noexcept {
+        const u32 imm5 = (insn >> 6U) & 0x1FU;
+        const u32 baseReg = (insn >> 3U) & 0x7U;
+        const u32 srcReg = insn & 0x7U;
+        const u32 address = regs_.at(baseReg) + imm5;
+
+        bus_->write8(address, static_cast<u8>(regs_.at(srcReg) & 0xFFU));
+        // flags unaffected
+    }
+
     // -------------------------- fetch/decode/dispatch --------------------------
 
     void ARM7TDMI::step() noexcept {
@@ -181,6 +203,8 @@ namespace gba {
         constexpr u16 kLdrLiteral = 0x4800U; // 01001
         constexpr u16 kStrImmW = 0x6000U;    // 01100
         constexpr u16 kLdrImmW = 0x6800U;    // 01101
+        constexpr u16 kStrImmB = 0x7000U;    // 01110
+        constexpr u16 kLdrImmB = 0x7800U;    // 01111
         constexpr u16 kBranch = 0xE000U;     // 11100
 
         if (top5 == kMovImm) {
@@ -195,10 +219,14 @@ namespace gba {
             exec_str_imm_w(insn);
         } else if (top5 == kLdrImmW) {
             exec_ldr_imm_w(insn);
+        } else if (top5 == kStrImmB) {
+            exec_str_imm_b(insn);
+        } else if (top5 == kLdrImmB) {
+            exec_ldr_imm_b(insn);
         } else if (top5 == kBranch) {
             exec_b(insn);
         } else {
-            // Unknown in this milestone: behave like NOP
+            // NOP for unimplemented in this milestone
         }
     }
 

@@ -1,24 +1,43 @@
 # Coding Guidelines
 
-These rules keep the codebase readable and warning‑free.
+These are short, practical rules that keep the codebase easy to read,
+refactor, and test.
+
+---
 
 ## General
 
-- No magic numbers. Introduce named constants in the most local scope that makes sense.
-- Self‑documenting names: `addr`, `base`, `offset`, `windowBytes` instead of single letters.
-- Prefer `constexpr` functions and constants when possible.
+- Prefer **small, testable units** over large objects
+- Use `constexpr` and named constants instead of magic numbers
+- Name things for what they **mean**, not how they’re used
 
-## Safety
+## Bit‑twiddling & encodings
 
-- Use `std::array::at()` during bring‑up for bounds checks.
-- Prefer `<algorithm>`/`<ranges>` over manual loops when it improves clarity.
+- Introduce named masks and shifts (e.g. `kTop5Shift`, `kLow3Mask`, `kImm5Mask`)
+- In tests, write top‑5 opcode bits in binary for readability (e.g. `0b01001U`)
+  but hide them behind helpers: `Thumb_LDR_literal(...)` etc.
 
-## Comments
+## Flags and arithmetic
 
-- Every function has a short summary line.
-- Non‑obvious hardware behavior (e.g., VRAM aliasing) gets a rule comment near the code and in docs.
+- Keep flag calculations (`N,Z,C,V`) in helpers (`set_nz`, `set_add_cv`, `set_sub_cv`)
+- For addition/subtraction carry/overflow, prefer explicit 64‑bit widening or
+  bit‑identities with small comments
 
-## Warnings
+## “Easily‑swappable parameters” lint
 
-- Keep the code free of compiler and static‑analysis warnings.
-- When a tool flags an issue (e.g., “magic number”), introduce a named constant or helper.
+- Avoid pairs of same‑typed adjacent parameters when order matters. Wrap with a
+  tiny strong type:
+  ```c++
+  struct RotRight { explicit constexpr RotRight(std::uint8_t n) : n(n) {} std::uint8_t n; };
+  static constexpr auto rotr(u32 v, RotRight a) noexcept -> u32;
+  ```
+- If an external signature must remain `(address, value)` (e.g. Bus writes),
+  add a local, one‑line suppression:
+  ```c++
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters) — matches bus API
+  ```
+
+## Tests
+
+- Keep tests **narrow** (one behavior per test) and **self‑documenting** with
+  small encoder helpers and named constants.

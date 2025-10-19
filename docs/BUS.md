@@ -1,32 +1,24 @@
-# Bus — CPU‑Facing Façade
+# Bus
 
-The Bus provides the interface the CPU core will use to access memory‑mapped resources.
-Currently it forwards to the MMU. Later it will mediate access to PPU/APU/DMA/Timers and
-handle side‑effects of I/O registers.
+The Bus is a thin, deterministic front door to the GBA memory map. It exposes
+little‑endian byte/half/word access and delegates to the MMU and attached
+devices. It does **not** implement CPU‑specific quirks such as the ARM7TDMI’s
+unaligned word rotation — that is done in the CPU layer.
+
+---
 
 ## Responsibilities
 
-- Expose 8/16/32‑bit read/write for the CPU.
-- Provide BIOS loading/reset hooks for the front‑end.
-- Keep MMU pure: address decoding and data storage only.
+- Provide `read8/16/32` and `write8/16/32`
+- Route requests to mapped regions (BIOS, IWRAM, VRAM, PAL, OAM, IO regs,
+  cartridge bus/wait states)
+- Remain boring: no implicit side effects besides what the region implements
 
-## API (current)
+## Semantics
 
-```c++
-class Bus {
-public:
-  void reset() noexcept;
-  bool load_bios(const std::filesystem::path& file) noexcept;
-
-  u8  read8(u32 addr)  const noexcept;
-  u16 read16(u32 addr) const noexcept;
-  u32 read32(u32 addr) const noexcept;
-
-  void write8(u32 addr, u8 value) noexcept;
-  void write16(u32 addr, u16 value) noexcept;
-  void write32(u32 addr, u32 value) noexcept;
-};
-```
-
-As PPU and I/O mature, Bus will dispatch to those subsystems explicitly (e.g. `ppu.read_vcount()`
-for `0x04000006`). The MMU will no longer back I/O with a raw array.
+- All accesses are little‑endian
+- Word accesses are aligned by the MMU as required by the backing array/device
+- **Unaligned access policy:** the Bus/MMU perform **no** architectural rotation.
+  When the CPU executes `LDR/STR (word)` to an unaligned address, it reads/writes
+  the aligned word and applies the rotate itself. This mirrors ARM7TDMI behavior
+  and keeps the Bus simple and testable.

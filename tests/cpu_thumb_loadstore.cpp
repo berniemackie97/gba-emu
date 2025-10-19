@@ -95,7 +95,7 @@ TEST(CPUThumbLoadStore, LdrLiteralThenStoreAndLoadWord) {
     ARM7TDMI cpu;
     cpu.attach(bus);
     cpu.reset();
-    cpu.debug_set_pc(base);
+    cpu.debug_set_program_counter(base);
 
     cpu.step(); // LDR literal -> r1 = 0x03000000
     cpu.step(); // MOV r0, #42

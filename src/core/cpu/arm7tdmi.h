@@ -42,7 +42,7 @@ namespace gba {
         void step() noexcept; // execute one Thumb16
 
         // -------- Debug/test hooks --------
-        void debug_set_pc(u32 addr) noexcept { regs_[kRegPC] = addr & ~u32{1}; }
+        void debug_set_program_counter(u32 addr) noexcept { regs_[kRegPC] = addr & ~u32{1}; }
         void debug_set_reg(int index, u32 value) noexcept {
             regs_.at(static_cast<std::size_t>(index & static_cast<int>(kRegIndexMask))) = value;
         }
@@ -99,6 +99,8 @@ namespace gba {
         void exec_ldr_literal(u16 insn) noexcept; // 01001 Rd, [PC, #imm8*4]
         void exec_ldr_imm_w(u16 insn) noexcept;   // 01101 LDR  Rd, [Rb, #imm5*4]
         void exec_str_imm_w(u16 insn) noexcept;   // 01100 STR  Rd, [Rb, #imm5*4]
+        void exec_ldr_imm_b(u16 insn) noexcept;   // 01111 LDRB Rd, [Rb, #imm5]
+        void exec_str_imm_b(u16 insn) noexcept;   // 01110 STRB Rd, [Rb, #imm5]
     };
 
 } // namespace gba

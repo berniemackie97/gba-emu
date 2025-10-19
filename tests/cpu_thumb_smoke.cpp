@@ -73,7 +73,7 @@ TEST(CPUThumb, MovAddSubAndBranch) {
     ARM7TDMI cpu;
     cpu.attach(bus);
     cpu.reset();
-    cpu.debug_set_pc(kBase);
+    cpu.debug_set_program_counter(kBase);
 
     // Execute 5 instructions (landing included)
     cpu.step(); // MOV
