@@ -1,0 +1,388 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ============================================================================
+  # Windows Build and Test (MSVC)
+  # ============================================================================
+  build-windows:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup vcpkg
+      uses: microsoft/setup-vcpkg@v1
+      with:
+        vcpkg-sha: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
+
+    - name: Cache vcpkg packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.VCPKG_ROOT }}/installed
+          ${{ env.VCPKG_ROOT }}/packages
+          ${{ env.VCPKG_ROOT }}/buildtrees
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
+
+    - name: Configure CMake
+      run: |
+        cmake --preset default `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j
+
+    - name: Run Tests
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{ matrix.build_type }} --output-on-failure --verbose
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-windows-${{ matrix.build_type }}
+        path: |
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/CTestCostData.txt
+
+  # ============================================================================
+  # Linux Build and Test (GCC & Clang)
+  # ============================================================================
+  build-linux:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+        include:
+          - compiler: gcc
+            cc: gcc-12
+            cxx: g++-12
+          - compiler: clang
+            cc: clang-15
+            cxx: clang++-15
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          ninja-build \
+          ${{ matrix.cc }} \
+          ${{ matrix.cxx }} \
+          libsdl2-dev \
+          pkg-config
+
+    - name: Setup vcpkg
+      uses: microsoft/setup-vcpkg@v1
+      with:
+        vcpkg-sha: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
+
+    - name: Cache vcpkg packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.VCPKG_ROOT }}/installed
+          ${{ env.VCPKG_ROOT }}/packages
+          ${{ env.VCPKG_ROOT }}/buildtrees
+        key: ${{ runner.os }}-${{ matrix.compiler }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.compiler }}-vcpkg-
+
+    - name: Configure CMake
+      env:
+        CC: ${{ matrix.cc }}
+        CXX: ${{ matrix.cxx }}
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+    - name: Build
+      run: cmake --build build -j
+
+    - name: Run Tests
+      working-directory: ${{github.workspace}}/build
+      run: ctest --output-on-failure --verbose
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-linux-${{ matrix.compiler }}-${{ matrix.build_type }}
+        path: |
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/CTestCostData.txt
+
+  # ============================================================================
+  # macOS Build and Test (Clang)
+  # ============================================================================
+  build-macos:
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        brew install ninja sdl2
+
+    - name: Setup vcpkg
+      uses: microsoft/setup-vcpkg@v1
+      with:
+        vcpkg-sha: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
+
+    - name: Cache vcpkg packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.VCPKG_ROOT }}/installed
+          ${{ env.VCPKG_ROOT }}/packages
+          ${{ env.VCPKG_ROOT }}/buildtrees
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+    - name: Build
+      run: cmake --build build -j
+
+    - name: Run Tests
+      working-directory: ${{github.workspace}}/build
+      run: ctest --output-on-failure --verbose
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-macos-${{ matrix.build_type }}
+        path: |
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/CTestCostData.txt
+
+  # ============================================================================
+  # Static Analysis
+  # ============================================================================
+  static-analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install clang-tidy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy-15
+
+    - name: Setup vcpkg
+      uses: microsoft/setup-vcpkg@v1
+      with:
+        vcpkg-sha: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Run clang-tidy
+      run: |
+        # Run clang-tidy on source files only (not tests for now)
+        find src -name "*.cpp" | xargs clang-tidy-15 -p build --warnings-as-errors='' || true
+
+  # ============================================================================
+  # Code Coverage (Linux only)
+  # ============================================================================
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          ninja-build \
+          gcc-12 \
+          g++-12 \
+          lcov
+
+    - name: Setup vcpkg
+      uses: microsoft/setup-vcpkg@v1
+      with:
+        vcpkg-sha: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
+
+    - name: Configure CMake with Coverage
+      env:
+        CC: gcc-12
+        CXX: g++-12
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          -DCMAKE_C_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+
+    - name: Build
+      run: cmake --build build -j
+
+    - name: Run Tests
+      working-directory: ${{github.workspace}}/build
+      run: ctest --output-on-failure
+
+    - name: Generate Coverage Report
+      run: |
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' '*/build/*' '*/tests/*' --output-file coverage.info
+        lcov --list coverage.info
+
+    - name: Upload Coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.info
+        flags: unittests
+        name: codecov-gba-emu
+        fail_ci_if_error: false
+
+  # ============================================================================
+  # Sanitizers (AddressSanitizer, UndefinedBehaviorSanitizer)
+  # ============================================================================
+  sanitizers:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build clang-15
+
+    - name: Setup vcpkg
+      uses: microsoft/setup-vcpkg@v1
+      with:
+        vcpkg-sha: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
+
+    - name: Configure CMake with ${{ matrix.sanitizer }} sanitizer
+      env:
+        CC: clang-15
+        CXX: clang++-15
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer" \
+          -DCMAKE_C_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}"
+
+    - name: Build
+      run: cmake --build build -j
+
+    - name: Run Tests with ${{ matrix.sanitizer }} sanitizer
+      working-directory: ${{github.workspace}}/build
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1
+        UBSAN_OPTIONS: print_stacktrace=1
+      run: ctest --output-on-failure --verbose
+
+  # ============================================================================
+  # Documentation Build Check
+  # ============================================================================
+  docs-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check Documentation Files
+      run: |
+        echo "Checking documentation structure..."
+        test -f README.md
+        test -f docs/BUILDING.md
+        test -f docs/TESTING.md
+        test -f docs/TECHNICAL_OVERVIEW.md
+        test -f tests/README.md
+        echo "✓ All documentation files present"
+
+    - name: Check for TODO markers in code
+      run: |
+        echo "Scanning for TODO markers..."
+        grep -r "TODO" src/ || echo "No TODOs found"
+        grep -r "FIXME" src/ || echo "No FIXMEs found"
+
+  # ============================================================================
+  # Build Summary
+  # ============================================================================
+  build-summary:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux, build-macos, static-analysis, coverage, sanitizers, docs-check]
+    if: always()
+
+    steps:
+    - name: Check Build Status
+      run: |
+        echo "Build Summary:"
+        echo "- Windows: ${{ needs.build-windows.result }}"
+        echo "- Linux: ${{ needs.build-linux.result }}"
+        echo "- macOS: ${{ needs.build-macos.result }}"
+        echo "- Static Analysis: ${{ needs.static-analysis.result }}"
+        echo "- Coverage: ${{ needs.coverage.result }}"
+        echo "- Sanitizers: ${{ needs.sanitizers.result }}"
+        echo "- Documentation: ${{ needs.docs-check.result }}"

@@ -15,7 +15,9 @@ namespace gba {
 
         // Register file geometry
         static constexpr int kNumRegs = 16;
-        static constexpr int kRegPC = 15;
+        static constexpr int kRegSP = 13;  // Stack pointer
+        static constexpr int kRegLR = 14;  // Link register
+        static constexpr int kRegPC = 15;  // Program counter
         static constexpr u32 kRegIndexMask = 0x0FU; // for low-4-bit masks on r#
         static constexpr u32 kSignBit = 1U << 31;   // MSB of 32-bit
 
@@ -76,6 +78,25 @@ namespace gba {
         void exec_add_imm(u16 insn) noexcept; // 00110 Rd imm8
         void exec_sub_imm(u16 insn) noexcept; // 00111 Rd imm8
         void exec_b(u16 insn) noexcept;       // 11100 imm11
+
+        // Format 2: Add/subtract register/immediate
+        void exec_add_reg(u16 insn) noexcept;  // 0001100 ADD Rd, Rs, Rn
+        void exec_sub_reg(u16 insn) noexcept;  // 0001101 SUB Rd, Rs, Rn
+        void exec_add_imm3(u16 insn) noexcept; // 0001110 ADD Rd, Rs, #imm3
+        void exec_sub_imm3(u16 insn) noexcept; // 0001111 SUB Rd, Rs, #imm3
+
+        // Format 5: High register operations / Branch exchange
+        void exec_add_high(u16 insn) noexcept; // 01000100 ADD Rd/Hd, Rs/Hs
+        void exec_cmp_high(u16 insn) noexcept; // 01000101 CMP Rd/Hd, Rs/Hs
+        void exec_mov_high(u16 insn) noexcept; // 01000110 MOV Rd/Hd, Rs/Hs
+        void exec_bx(u16 insn) noexcept;       // 01000111 BX Rs/Hs
+
+        // Format 14: Push/Pop registers
+        void exec_push(u16 insn) noexcept;     // 1011010 PUSH {Rlist}{LR}
+        void exec_pop(u16 insn) noexcept;      // 1011110 POP {Rlist}{PC}
+
+        // Format 16: Conditional branch
+        void exec_bcond(u16 insn) noexcept;    // 1101 cond imm8
 
         // ----- BIT HELPERS -----
         // Rotate-right by 'amount' (mod 32). Second param is a byte on purpose

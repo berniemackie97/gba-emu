@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <span>
+#include <vector>
 #include "core/io/io.h"
 
 namespace gba {

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(cmake --build:*)",
+      "Bash(cmake --preset:*)",
+      "Bash(where:*)",
+      "Bash(cmake:*)",
+      "Bash(test:*)",
+      "Bash(ninja:*)",
+      "Bash(echo:*)",
+      "Bash(./bootstrap-vcpkg.bat)",
+      "Bash(./vcpkg install:*)",
+      "Bash(setx VCPKG_ROOT:*)",
+      "Bash(ctest:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

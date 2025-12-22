@@ -10,6 +10,7 @@ add_library(gba_core
     src/core/bus/bus.cpp
     src/core/cpu/arm7tdmi.cpp
     src/core/mmu/mmu.cpp
+    src/core/io/io.cpp
 )
 target_include_directories(gba_core PUBLIC src)
 target_compile_definitions(gba_core PUBLIC PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -20,8 +21,8 @@ add_executable(gba_sdl apps/sdl/main.cpp)
 target_link_libraries(gba_sdl PRIVATE gba_core SDL2::SDL2 SDL2::SDL2main)
 
 # Tests
-enable_testing()
 find_package(GTest CONFIG REQUIRED)
+enable_testing()
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
