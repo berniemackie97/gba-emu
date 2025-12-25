@@ -219,6 +219,17 @@ namespace gba {
         set_sub_cv(regValue, immValue, difference);
     }
 
+    // 00101 CMP Rd, #imm8 - Compare immediate (like SUB but doesn't store result)
+    void ARM7TDMI::exec_cmp_imm(u16 insn) noexcept {
+        const u32 reg = (insn >> 8U) & 0x7U;
+        const u32 immValue = insn & 0xFFU;
+        const u32 regValue = regs_.at(reg);
+        const u32 difference = regValue - immValue;
+        // Don't store result - only update flags
+        set_nz(difference);
+        set_sub_cv(regValue, immValue, difference);
+    }
+
     void ARM7TDMI::exec_b(u16 insn) noexcept {
         // imm11 in bits [10:0], target = sign_extend((imm11 << 1))
         constexpr u16 kImm11Mask = 0x07FFU;
@@ -287,6 +298,58 @@ namespace gba {
         regs_.at(destReg) = result;
         set_nz(result);
         set_sub_cv(srcValue, imm3, result);
+    }
+
+    // -------------------------- Thumb Format 4: ALU operations --------------------------
+
+    // 0100000000 AND Rd, Rs - Bitwise AND
+    void ARM7TDMI::exec_and(u16 insn) noexcept {
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 result = regs_.at(destReg) & regs_.at(srcReg);
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // C and V unaffected
+    }
+
+    // 0100000001 EOR Rd, Rs - Bitwise Exclusive OR
+    void ARM7TDMI::exec_eor(u16 insn) noexcept {
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 result = regs_.at(destReg) ^ regs_.at(srcReg);
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // C and V unaffected
+    }
+
+    // 0100001100 ORR Rd, Rs - Bitwise OR
+    void ARM7TDMI::exec_orr(u16 insn) noexcept {
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 result = regs_.at(destReg) | regs_.at(srcReg);
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // C and V unaffected
+    }
+
+    // 0100001110 BIC Rd, Rs - Bit Clear (AND NOT)
+    void ARM7TDMI::exec_bic(u16 insn) noexcept {
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 result = regs_.at(destReg) & ~regs_.at(srcReg);
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // C and V unaffected
+    }
+
+    // 0100001111 MVN Rd, Rs - Move NOT
+    void ARM7TDMI::exec_mvn(u16 insn) noexcept {
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 result = ~regs_.at(srcReg);
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // C and V unaffected
     }
 
     // -------------------------- Thumb Format 5: High register ops / BX --------------------------
@@ -571,6 +634,8 @@ namespace gba {
         const u16 top7 = static_cast<u16>(insn & 0xFE00U);
         // For Format 5, we need top 8 bits (0b01000_1xx_xxxxxxxx)
         const u16 top8 = static_cast<u16>(insn & 0xFF00U);
+        // For Format 4 ALU, we need top 10 bits (0b010000_xxxx_xxxxxx)
+        const u16 top10 = static_cast<u16>(insn & 0xFFC0U);
         // For Format 14 (PUSH/POP), we need top 7 bits + bit 3 (0b1011_x10_xxxxxxxxx)
         const u16 top7_pushpop = static_cast<u16>(insn & 0xF600U);
         // For Format 16 (Bcond), we need top 4 bits (0b1101_xxxx_xxxxxxxx)
@@ -582,6 +647,7 @@ namespace gba {
         constexpr u16 kAsrImm = 0x1000U;     // 00010
 
         constexpr u16 kMovImm = 0x2000U;     // 00100
+        constexpr u16 kCmpImm = 0x2800U;     // 00101
         constexpr u16 kAddImm = 0x3000U;     // 00110
         constexpr u16 kSubImm = 0x3800U;     // 00111
         constexpr u16 kLdrLiteral = 0x4800U; // 01001
@@ -597,6 +663,13 @@ namespace gba {
         constexpr u16 kAddImm3 = 0x1C00U;   // 0001110
         constexpr u16 kSubImm3 = 0x1E00U;   // 0001111
 
+        // Format 4: ALU operations (10-bit decode)
+        constexpr u16 kAnd = 0x4000U;       // 0100000000
+        constexpr u16 kEor = 0x4040U;       // 0100000001
+        constexpr u16 kOrr = 0x4300U;       // 0100001100
+        constexpr u16 kBic = 0x4380U;       // 0100001110
+        constexpr u16 kMvn = 0x43C0U;       // 0100001111
+
         // Format 5: High register operations / BX (8-bit decode)
         constexpr u16 kAddHigh = 0x4400U;   // 01000100
         constexpr u16 kCmpHigh = 0x4500U;   // 01000101
@@ -610,8 +683,18 @@ namespace gba {
         // Format 16: Conditional branch (top 4 bits)
         constexpr u16 kBCond = 0xD000U;     // 1101
 
-        // Check Format 5 first (8-bit match) - most specific
-        if (top8 == kAddHigh) {
+        // Check most specific first: Format 10 (10-bit), then Format 8 (8-bit), then Format 7 (7-bit)
+        if (top10 == kAnd) {
+            exec_and(insn);
+        } else if (top10 == kEor) {
+            exec_eor(insn);
+        } else if (top10 == kOrr) {
+            exec_orr(insn);
+        } else if (top10 == kBic) {
+            exec_bic(insn);
+        } else if (top10 == kMvn) {
+            exec_mvn(insn);
+        } else if (top8 == kAddHigh) {
             exec_add_high(insn);
         } else if (top8 == kCmpHigh) {
             exec_cmp_high(insn);
@@ -633,6 +716,8 @@ namespace gba {
             exec_sub_imm3(insn);
         } else if (top5 == kMovImm) {
             exec_mov_imm(insn);
+        } else if (top5 == kCmpImm) {
+            exec_cmp_imm(insn);
         } else if (top5 == kAddImm) {
             exec_add_imm(insn);
         } else if (top5 == kSubImm) {

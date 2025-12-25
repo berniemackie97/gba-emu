@@ -1,0 +1,58 @@
+version: 1
+meta:
+    template:
+        id: cpp
+    inputs:
+        template.id: cpp
+checks:
+    - id: template:cpp:6bbc87a099e5
+      source: template:cpp
+      name: configure
+      run: cmake -S . -B build
+      shell: cmd
+      requires: cmake
+    - id: template:cpp:1e7940fe2631
+      source: template:cpp
+      name: build
+      run: cmake --build build
+      shell: cmd
+      requires: cmake
+    - id: template:cpp:a604181cd805
+      source: template:cpp
+      name: tests
+      run: ctest --test-dir build
+      shell: cmd
+      requires: ctest
+    - id: ci:ci:5bf0d0e5c456
+      source: ci:ci
+      name: ci:ci:build-windows:configure-cmake
+      run: |-
+        cmake --preset default `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+      shell: pwsh
+      os: windows
+      requires: cmake
+    - id: ci:ci:0277e0d595b8
+      source: ci:ci
+      name: ci:ci:build-windows:build
+      run: cmake --build build --config ${{ matrix.build_type }} -j
+      shell: pwsh
+      os: windows
+      requires: cmake
+    - id: ci:ci:ec3d779511a8
+      source: ci:ci
+      name: ci:ci:build-windows:run-tests
+      run: ctest -C ${{ matrix.build_type }} --output-on-failure --verbose
+      shell: pwsh
+      cwd: ${{github.workspace}}/build
+      os: windows
+      requires: ctest
+insults:
+    mode: snarky
+    file: .buildbouncer/assets/insults/default.json
+    locale: en
+banter:
+    enabled: true
+    file: .buildbouncer/assets/banter/default.json
+    locale: en

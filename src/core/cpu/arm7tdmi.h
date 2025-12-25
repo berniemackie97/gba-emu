@@ -77,6 +77,7 @@ namespace gba {
         void exec_mov_imm(u16 insn) noexcept; // 00100 Rd imm8
         void exec_add_imm(u16 insn) noexcept; // 00110 Rd imm8
         void exec_sub_imm(u16 insn) noexcept; // 00111 Rd imm8
+        void exec_cmp_imm(u16 insn) noexcept; // 00101 Rd imm8
         void exec_b(u16 insn) noexcept;       // 11100 imm11
 
         // Format 1: Shift by immediate
@@ -89,6 +90,13 @@ namespace gba {
         void exec_sub_reg(u16 insn) noexcept;  // 0001101 SUB Rd, Rs, Rn
         void exec_add_imm3(u16 insn) noexcept; // 0001110 ADD Rd, Rs, #imm3
         void exec_sub_imm3(u16 insn) noexcept; // 0001111 SUB Rd, Rs, #imm3
+
+        // Format 4: ALU operations
+        void exec_and(u16 insn) noexcept;      // 0100000000 AND Rd, Rs
+        void exec_eor(u16 insn) noexcept;      // 0100000001 EOR Rd, Rs
+        void exec_orr(u16 insn) noexcept;      // 0100001100 ORR Rd, Rs
+        void exec_bic(u16 insn) noexcept;      // 0100001110 BIC Rd, Rs
+        void exec_mvn(u16 insn) noexcept;      // 0100001111 MVN Rd, Rs
 
         // Format 5: High register operations / Branch exchange
         void exec_add_high(u16 insn) noexcept; // 01000100 ADD Rd/Hd, Rs/Hs
