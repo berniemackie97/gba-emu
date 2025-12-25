@@ -48,6 +48,9 @@ checks:
       cwd: build
       os: windows
       requires: ctest
+protection:
+    level: moderate
+    interactive: true
 insults:
     mode: snarky
     file: .buildbouncer/assets/insults/default.json
