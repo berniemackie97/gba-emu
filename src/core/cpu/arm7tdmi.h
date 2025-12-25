@@ -79,6 +79,11 @@ namespace gba {
         void exec_sub_imm(u16 insn) noexcept; // 00111 Rd imm8
         void exec_b(u16 insn) noexcept;       // 11100 imm11
 
+        // Format 1: Shift by immediate
+        void exec_lsl_imm(u16 insn) noexcept; // 00000 LSL Rd, Rs, #imm5
+        void exec_lsr_imm(u16 insn) noexcept; // 00001 LSR Rd, Rs, #imm5
+        void exec_asr_imm(u16 insn) noexcept; // 00010 ASR Rd, Rs, #imm5
+
         // Format 2: Add/subtract register/immediate
         void exec_add_reg(u16 insn) noexcept;  // 0001100 ADD Rd, Rs, Rn
         void exec_sub_reg(u16 insn) noexcept;  // 0001101 SUB Rd, Rs, Rn

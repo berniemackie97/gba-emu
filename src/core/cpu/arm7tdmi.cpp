@@ -88,6 +88,110 @@ namespace gba {
 
     // -------------------------- Thumb subset: data-processing --------------------------
 
+    // Format 1: Shift by immediate
+
+    // 00000 LSL Rd, Rs, #imm5 - Logical Shift Left
+    void ARM7TDMI::exec_lsl_imm(u16 insn) noexcept {
+        const u32 imm5 = (insn >> 6U) & 0x1FU;
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 srcValue = regs_.at(srcReg);
+
+        u32 result;
+        if (imm5 == 0U) {
+            // LSL #0 is a special case - no shift, no carry change
+            result = srcValue;
+        } else {
+            result = srcValue << imm5;
+            // Carry = last bit shifted out (bit 32-imm5 of original value)
+            const bool carryOut = ((srcValue >> (32U - imm5)) & 0x1U) != 0U;
+            if (carryOut) {
+                cpsr_ |= kFlagC;
+            } else {
+                cpsr_ &= ~kFlagC;
+            }
+        }
+
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // V unaffected
+    }
+
+    // 00001 LSR Rd, Rs, #imm5 - Logical Shift Right
+    void ARM7TDMI::exec_lsr_imm(u16 insn) noexcept {
+        const u32 imm5 = (insn >> 6U) & 0x1FU;
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 srcValue = regs_.at(srcReg);
+
+        u32 result;
+        // LSR #0 is encoded as LSR #32
+        const u32 shiftAmount = (imm5 == 0U) ? 32U : imm5;
+
+        if (shiftAmount == 32U) {
+            result = 0U;
+            // Carry = bit 31 of original value
+            const bool carryOut = ((srcValue >> 31U) & 0x1U) != 0U;
+            if (carryOut) {
+                cpsr_ |= kFlagC;
+            } else {
+                cpsr_ &= ~kFlagC;
+            }
+        } else {
+            result = srcValue >> shiftAmount;
+            // Carry = last bit shifted out
+            const bool carryOut = ((srcValue >> (shiftAmount - 1U)) & 0x1U) != 0U;
+            if (carryOut) {
+                cpsr_ |= kFlagC;
+            } else {
+                cpsr_ &= ~kFlagC;
+            }
+        }
+
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // V unaffected
+    }
+
+    // 00010 ASR Rd, Rs, #imm5 - Arithmetic Shift Right (sign-extend)
+    void ARM7TDMI::exec_asr_imm(u16 insn) noexcept {
+        const u32 imm5 = (insn >> 6U) & 0x1FU;
+        const u32 srcReg = (insn >> 3U) & 0x7U;
+        const u32 destReg = insn & 0x7U;
+        const u32 srcValue = regs_.at(srcReg);
+
+        u32 result;
+        // ASR #0 is encoded as ASR #32
+        const u32 shiftAmount = (imm5 == 0U) ? 32U : imm5;
+
+        if (shiftAmount >= 32U) {
+            // Shift by 32 or more: result is all 0s (positive) or all 1s (negative)
+            const bool isNegative = ((srcValue & kSignBit) != 0U);
+            result = isNegative ? 0xFFFFFFFFU : 0U;
+            // Carry = sign bit
+            if (isNegative) {
+                cpsr_ |= kFlagC;
+            } else {
+                cpsr_ &= ~kFlagC;
+            }
+        } else {
+            // Arithmetic shift right: preserve sign bit
+            const auto signedSrc = static_cast<std::int32_t>(srcValue);
+            result = static_cast<u32>(signedSrc >> shiftAmount);
+            // Carry = last bit shifted out
+            const bool carryOut = ((srcValue >> (shiftAmount - 1U)) & 0x1U) != 0U;
+            if (carryOut) {
+                cpsr_ |= kFlagC;
+            } else {
+                cpsr_ &= ~kFlagC;
+            }
+        }
+
+        regs_.at(destReg) = result;
+        set_nz(result);
+        // V unaffected
+    }
+
     void ARM7TDMI::exec_mov_imm(u16 insn) noexcept {
         const u32 destReg = (insn >> 8U) & 0x7U;
         const u32 imm8 = insn & 0xFFU;
@@ -472,6 +576,11 @@ namespace gba {
         // For Format 16 (Bcond), we need top 4 bits (0b1101_xxxx_xxxxxxxx)
         const u16 top4 = static_cast<u16>(insn & 0xF000U);
 
+        // Format 1: Shift by immediate (top 5 bits)
+        constexpr u16 kLslImm = 0x0000U;     // 00000
+        constexpr u16 kLsrImm = 0x0800U;     // 00001
+        constexpr u16 kAsrImm = 0x1000U;     // 00010
+
         constexpr u16 kMovImm = 0x2000U;     // 00100
         constexpr u16 kAddImm = 0x3000U;     // 00110
         constexpr u16 kSubImm = 0x3800U;     // 00111
@@ -542,6 +651,12 @@ namespace gba {
             exec_bcond(insn);
         } else if (top5 == kBranch) {
             exec_b(insn);
+        } else if (top5 == kLslImm) {
+            exec_lsl_imm(insn);
+        } else if (top5 == kLsrImm) {
+            exec_lsr_imm(insn);
+        } else if (top5 == kAsrImm) {
+            exec_asr_imm(insn);
         } else {
             // NOP for unimplemented in this milestone
         }
