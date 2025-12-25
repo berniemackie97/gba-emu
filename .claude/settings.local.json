@@ -13,7 +13,10 @@
       "Bash(./vcpkg install:*)",
       "Bash(setx VCPKG_ROOT:*)",
       "Bash(ctest:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Implement Thumb formats 2, 5, 14, 16 and comprehensive testing infrastructure\n\nImplement critical CPU instructions:\n- Format 2 (Add/Subtract): ADD/SUB with register and 3-bit immediate\n- Format 5 (High register ops): ADD/CMP/MOV for r8-r15, BX instruction\n- Format 14 (Push/Pop): PUSH {Rlist}{LR}, POP {Rlist}{PC}\n- Format 16 (Conditional branch): 16 condition codes (BEQ, BNE, etc.)\n\nAdd comprehensive test infrastructure:\n- 3 new test files: cpu_thumb_format2.cpp, cpu_thumb_alu.cpp, cpu_flags.cpp\n- GitHub Actions CI/CD with multi-platform support (Windows/Linux/macOS)\n- Test automation scripts (PowerShell and Bash)\n- Comprehensive documentation (PROJECT_ASSESSMENT.md, TEST_INFRASTRUCTURE.md)\n\nBuild system improvements:\n- Add vcpkg integration with SDL2 and GoogleTest\n- Add io.cpp to build (was missing)\n- Add missing #include <vector> to mmu.h\n\nTest results: 40/51 tests passing (78% pass rate)\n- All implemented features fully tested\n- 11 failing tests are unimplemented ALU operations (expected)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(./build/cpu_thumb_format5_test.exe:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
