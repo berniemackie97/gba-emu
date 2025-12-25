@@ -23,29 +23,29 @@ checks:
       run: ctest --test-dir build
       shell: cmd
       requires: ctest
-    - id: ci:ci:5bf0d0e5c456
+    - id: ci:ci:8409aa7695a2
       source: ci:ci
       name: ci:ci:build-windows:configure-cmake
       run: |-
         cmake --preset default `
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-          -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_TOOLCHAIN_FILE=C:/Users/berni/vcpkg/scripts/buildsystems/vcpkg.cmake
       shell: pwsh
       os: windows
       requires: cmake
-    - id: ci:ci:0277e0d595b8
+    - id: ci:ci:ed664ee0a37b
       source: ci:ci
       name: ci:ci:build-windows:build
-      run: cmake --build build --config ${{ matrix.build_type }} -j
+      run: cmake --build build --config Release -j
       shell: pwsh
       os: windows
       requires: cmake
-    - id: ci:ci:ec3d779511a8
+    - id: ci:ci:d973b3287268
       source: ci:ci
       name: ci:ci:build-windows:run-tests
-      run: ctest -C ${{ matrix.build_type }} --output-on-failure --verbose
+      run: ctest -C Release --output-on-failure --verbose
       shell: pwsh
-      cwd: ${{github.workspace}}/build
+      cwd: build
       os: windows
       requires: ctest
 insults:
