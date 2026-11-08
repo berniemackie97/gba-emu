@@ -59,8 +59,10 @@ auto read_file_image(const std::filesystem::path &path, std::uintmax_t minimum_s
 
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
         stream.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-        if (stream.gcount() != static_cast<std::streamsize>(bytes.size()) ||
-            stream.peek() != std::char_traits<char>::eof()) {
+        if (stream.gcount() != static_cast<std::streamsize>(bytes.size()) || stream.bad()) {
+            return {ImageLoadError::IncompleteRead, {}};
+        }
+        if (stream.peek() != std::char_traits<char>::eof() || stream.bad()) {
             return {ImageLoadError::IncompleteRead, {}};
         }
 
