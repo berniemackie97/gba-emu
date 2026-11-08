@@ -48,9 +48,9 @@ class DisplayRegisters {
 
     void write8(u32 offset, u8 value) noexcept {
         if (offset < kDispcnt + 2U) {
-            dispcnt_ = write_register_byte(dispcnt_, offset, value, 0xFFFFU);
+            dispcnt_ = write_register_byte(dispcnt_, {.lane = offset, .value = value, .writable_mask = 0xFFFFU});
         } else if (offset >= kDispstat && offset < kDispstat + 2U) {
-            dispstat_ = write_register_byte(dispstat_, offset, value, kStatusWritable);
+            dispstat_ = write_register_byte(dispstat_, {.lane = offset, .value = value, .writable_mask = kStatusWritable});
         }
     }
 
