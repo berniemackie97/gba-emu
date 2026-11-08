@@ -34,12 +34,12 @@ jobs:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Install Ninja
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libltdl-dev
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11.6
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
         with:
           vcpkgGitCommitId: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
       - name: Configure
@@ -50,7 +50,7 @@ jobs:
         run: ctest --preset ${{ matrix.preset }} --build-config ${{ matrix.configuration }} --output-on-failure
       - name: Test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
           name: tests-${{ matrix.name }}
           path: build/*/Testing/Temporary/LastTest.log
@@ -63,11 +63,11 @@ jobs:
       CC: clang
       CXX: clang++
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Install analysis tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-tidy libltdl-dev
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11.6
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
         with:
           vcpkgGitCommitId: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
       - name: Configure
@@ -86,11 +86,11 @@ jobs:
       CC: clang
       CXX: clang++
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Install Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libltdl-dev
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11.6
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
         with:
           vcpkgGitCommitId: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
       - name: Configure with sanitizer
@@ -113,11 +113,11 @@ jobs:
       CC: gcc
       CXX: g++
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Install coverage tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build lcov
+        run: sudo apt-get update && sudo apt-get install -y ninja-build lcov libltdl-dev
       - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11.6
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
         with:
           vcpkgGitCommitId: b2c74683ecfd6a8e7d27ffb0df077f66a9339509
       - name: Configure with instrumentation
@@ -135,7 +135,7 @@ jobs:
           lcov --remove coverage.raw.info '/usr/*' '*/build/*' '*/tests/*' --output-file coverage.info
           lcov --list coverage.info
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
           name: coverage-report
           path: coverage.info
@@ -144,7 +144,7 @@ jobs:
     name: Repository consistency
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Check required files and presets
         run: |
           python3 - <<'PY'
