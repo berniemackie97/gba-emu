@@ -45,9 +45,9 @@ namespace gba {
         static constexpr std::size_t GAMEPAK_HEADER_SIZE = 0xC0U;
 
         // --- Window constants used for aliasing behaviour (names beat hex) ---
-        static constexpr u32 kWindow16MiB = 0x01000000U;                     // palette/OAM mirror window
+        static constexpr u32 kWindow16MiB = 0x01000000U;                     // internal RAM/video region windows
         static constexpr u32 kVRAMWindow128KiB = 0x00020000U;                // 128 KiB window 0x06000000–0x0601FFFF
-        static constexpr u32 kVRAMTailBytes = kVRAMWindow128KiB - VRAM_SIZE; // 32 KiB tail that mirrors first 32 KiB
+        static constexpr u32 kVRAMTailBytes = kVRAMWindow128KiB - VRAM_SIZE; // upper 32 KiB aliases final VRAM bank
 
         static constexpr u8 kOpenBus = 0xFFU;
 
@@ -76,6 +76,8 @@ namespace gba {
         void debug_set_hblank_for_tests(bool hblank) noexcept { io_.debug_set_hblank_for_tests(hblank); }
 
       private:
+        void write_storage8(u32 addr, u8 value) noexcept;
+
         // helpers
         [[nodiscard]] static constexpr auto in(u32 addr, u32 base, std::size_t size) noexcept -> bool {
             return addr >= base && addr < base + static_cast<u32>(size);
@@ -101,11 +103,9 @@ namespace gba {
         }
 
         // aliasing helpers
-        [[nodiscard]] static auto vram_offset(u32 addr) noexcept -> std::size_t {
-            // In first 128 KiB window: 0..(96 KiB-1) map to VRAM; 96 KiB..128 KiB mirror 0..32 KiB
-            const u32 off = addr - VRAM_BASE;
-            return static_cast<std::size_t>((off < static_cast<u32>(VRAM_SIZE)) ? off
-                                                                                : (off - static_cast<u32>(VRAM_SIZE)));
+        [[nodiscard]] static constexpr auto vram_offset(u32 addr) noexcept -> std::size_t {
+            const u32 offset = (addr - VRAM_BASE) & (kVRAMWindow128KiB - 1U);
+            return static_cast<std::size_t>(offset < VRAM_SIZE ? offset : offset - kVRAMTailBytes);
         }
         [[nodiscard]] static auto pal_offset(u32 addr) noexcept -> std::size_t {
             // 1 KiB mirrored across 16 MiB block
