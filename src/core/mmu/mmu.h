@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <span>
 #include <vector>
+#include "core/content/file_image.h"
 #include "core/io/io.h"
 
 namespace gba {
@@ -41,6 +42,7 @@ namespace gba {
         static constexpr u32 WS1_BASE = 0x0A000000U;
         static constexpr u32 WS2_BASE = 0x0C000000U;
         static constexpr u32 WS_REGION_SIZE_32MiB = 0x02000000U; // 32 MiB per region
+        static constexpr std::size_t GAMEPAK_HEADER_SIZE = 0xC0U;
 
         // --- Window constants used for aliasing behaviour (names beat hex) ---
         static constexpr u32 kWindow16MiB = 0x01000000U;                     // palette/OAM mirror window
@@ -52,11 +54,11 @@ namespace gba {
         // lifecycle & ROM
         void reset() noexcept;
 
-        auto load_bios(const std::filesystem::path &file) noexcept -> bool;
+        [[nodiscard]] auto load_bios(const std::filesystem::path &file, ImageLoadError *error = nullptr) noexcept -> bool;
 
         // GamePak: file based and in memory loading
-        auto load_gamepak(const std::filesystem::path &file) noexcept -> bool;
-        void load_gamepak(std::span<const u8> bytes) noexcept;
+        [[nodiscard]] auto load_gamepak(const std::filesystem::path &file, ImageLoadError *error = nullptr) noexcept -> bool;
+        [[nodiscard]] auto load_gamepak(std::span<const u8> bytes, ImageLoadError *error = nullptr) noexcept -> bool;
 
         // byte access (we’ll add timings and alignment rules later per width)
         [[nodiscard]] auto read8(u32 addr) const noexcept -> u8;
