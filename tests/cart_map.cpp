@@ -115,3 +115,22 @@ TEST(GamePak, MemoryImagesHaveTheSameUpperBoundAndPreserveEarlierContents) {
     EXPECT_EQ(mmu.read8(MMU::WS0_BASE), replacement[0]);
     EXPECT_EQ(mmu.read8(MMU::WS0_BASE + 1U), replacement[1]);
 }
+
+TEST(GamePak, AcceptsMaximumWindowSizedFile) {
+    const gba::test::TempAsset file("gamepak-file-window-limit.bin");
+    std::array<u8, MMU::GAMEPAK_HEADER_SIZE> header{};
+    header.front() = 0x93U;
+    ASSERT_TRUE(file.write(header));
+
+    std::error_code resizeError;
+    std::filesystem::resize_file(file.path(), MMU::WS_REGION_SIZE_32MiB, resizeError);
+    ASSERT_FALSE(resizeError);
+
+    MMU mmu;
+    mmu.reset();
+    gba::ImageLoadError error = gba::ImageLoadError::TooLarge;
+    ASSERT_TRUE(mmu.load_gamepak(file.path(), &error));
+    EXPECT_EQ(error, gba::ImageLoadError::None);
+    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), header.front());
+    EXPECT_EQ(mmu.read8(MMU::WS2_BASE + MMU::WS_REGION_SIZE_32MiB - 1U), 0U);
+}
