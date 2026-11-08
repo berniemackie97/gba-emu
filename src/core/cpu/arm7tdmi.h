@@ -77,9 +77,11 @@ namespace gba {
         ExecutionFault fault_{};
 
         // ----- Helpers -----
-        static constexpr auto sign_extend(u32 value, u32 width) noexcept -> u32 {
-            const u32 mask = (u32{1} << width) - 1U;
-            const u32 signMask = u32{1} << (width - 1U);
+        template <u32 Width>
+        static constexpr auto sign_extend(u32 value) noexcept -> u32 {
+            static_assert(Width > 1U && Width < kWordBits);
+            const u32 mask = (u32{1} << Width) - 1U;
+            const u32 signMask = u32{1} << (Width - 1U);
             return ((value & mask) ^ signMask) - signMask;
         }
 
