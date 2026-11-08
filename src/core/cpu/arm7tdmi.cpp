@@ -239,7 +239,7 @@ namespace gba {
     void ARM7TDMI::exec_b(u16 insn) noexcept {
         // imm11 in bits [10:0], target = sign_extend((imm11 << 1))
         const u32 offset12 = static_cast<u32>(insn & kImm11Mask) << 1U;
-        regs_[kRegPC] = thumb_pc() + sign_extend(offset12, 12U);
+        regs_[kRegPC] = thumb_pc() + sign_extend<12U>(offset12);
     }
 
     // -------------------------- Thumb Format 2: Add/Subtract --------------------------
@@ -566,7 +566,7 @@ namespace gba {
         const u32 cond = (insn >> 8U) & 0xFU;    // bits 8-11: condition
         const u32 imm8 = insn & 0xFFU;           // bits 0-7: offset
 
-        const u32 signedOffset = sign_extend(imm8 << 1U, 9U);
+        const u32 signedOffset = sign_extend<9U>(imm8 << 1U);
 
         // Evaluate condition based on CPSR flags
         bool conditionMet = false;
