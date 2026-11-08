@@ -49,6 +49,9 @@ value, VCOUNT and HBlank state. The live VCOUNT-equals-compare status bit
 reads as set immediately after reset because both values are zero. Attempts
 to write the read-only status flags do not change them.
 
+Device-specific register ownership, masked reads/writes and unsupported ranges
+are specified in [IO.md](IO.md). The MMU does not store unknown I/O bytes.
+
 ## Verification and references
 
 The `mmu_map`, `mmu_width` and `io_regs` test suites assert mirrored
