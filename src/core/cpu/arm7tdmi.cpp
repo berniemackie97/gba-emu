@@ -85,11 +85,7 @@ namespace gba {
 
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     void ARM7TDMI::write_u32_unaligned(u32 addr, u32 value) noexcept {
-        const u32 aligned = addr & kWordMask;
-        // rotate left by 8*(addr&3) == rotr by (32 - 8*(addr&3))
-        const auto rotL = static_cast<std::uint8_t>((kWordBits - ((addr & 0x3U) * kByteBits)) & kRotateMask);
-        const u32 rotated = rotr(value, RotRight{rotL});
-        bus_->write32(aligned, rotated);
+        bus_->write32(addr & kWordMask, value);
     }
 
     // -------------------------- Thumb subset: data-processing --------------------------
@@ -602,6 +598,100 @@ namespace gba {
         // flags unaffected
     }
 
+    auto ARM7TDMI::read_u16_unaligned(u32 address) const noexcept -> u32 {
+        const u32 halfword = bus_->read16(address & ~u32{1});
+        if ((address & 1U) == 0U) {
+            return halfword;
+        }
+        return (halfword >> 8U) | (halfword << 24U);
+    }
+
+    void ARM7TDMI::exec_memory_register(u16 instruction) noexcept {
+        const u32 offsetRegister = (instruction >> 6U) & kLow3Mask;
+        const u32 baseRegister = (instruction >> 3U) & kLow3Mask;
+        const u32 dataRegister = instruction & kLow3Mask;
+        const u32 address = regs_.at(baseRegister) + regs_.at(offsetRegister);
+        const u32 operation = (instruction >> 10U) & 3U;
+
+        if ((instruction & 0x0200U) == 0U) {
+            switch (operation) {
+            case 0U:
+                write_u32_unaligned(address, regs_.at(dataRegister));
+                break;
+            case 1U:
+                bus_->write8(address, static_cast<u8>(regs_.at(dataRegister)));
+                break;
+            case 2U:
+                regs_.at(dataRegister) = read_u32_unaligned(address);
+                break;
+            case 3U:
+                regs_.at(dataRegister) = bus_->read8(address);
+                break;
+            default:
+                break;
+            }
+            return;
+        }
+
+        switch (operation) {
+        case 0U:
+            bus_->write16(address & ~u32{1}, static_cast<u16>(regs_.at(dataRegister)));
+            break;
+        case 1U:
+            regs_.at(dataRegister) = sign_extend<8U>(bus_->read8(address));
+            break;
+        case 2U:
+            regs_.at(dataRegister) = read_u16_unaligned(address);
+            break;
+        case 3U:
+            regs_.at(dataRegister) = (address & 1U) != 0U
+                ? sign_extend<8U>(bus_->read8(address))
+                : sign_extend<16U>(bus_->read16(address));
+            break;
+        default:
+            break;
+        }
+    }
+
+    void ARM7TDMI::exec_memory_halfword(u16 instruction) noexcept {
+        const u32 offset = ((instruction >> 6U) & 0x1FU) << 1U;
+        const u32 baseRegister = (instruction >> 3U) & kLow3Mask;
+        const u32 dataRegister = instruction & kLow3Mask;
+        const u32 address = regs_.at(baseRegister) + offset;
+        if ((instruction & 0x0800U) != 0U) {
+            regs_.at(dataRegister) = read_u16_unaligned(address);
+        } else {
+            bus_->write16(address & ~u32{1}, static_cast<u16>(regs_.at(dataRegister)));
+        }
+    }
+
+    void ARM7TDMI::exec_memory_stack(u16 instruction) noexcept {
+        const u32 dataRegister = (instruction >> 8U) & kLow3Mask;
+        const u32 address = regs_[kRegSP] + ((instruction & 0xFFU) << 2U);
+        if ((instruction & 0x0800U) != 0U) {
+            regs_.at(dataRegister) = read_u32_unaligned(address);
+        } else {
+            write_u32_unaligned(address, regs_.at(dataRegister));
+        }
+    }
+
+    void ARM7TDMI::exec_relative_address(u16 instruction) noexcept {
+        const u32 dataRegister = (instruction >> 8U) & kLow3Mask;
+        const u32 base = (instruction & 0x0800U) != 0U
+            ? regs_[kRegSP]
+            : (thumb_pc() & kWordMask);
+        regs_.at(dataRegister) = base + ((instruction & 0xFFU) << 2U);
+    }
+
+    void ARM7TDMI::exec_adjust_stack(u16 instruction) noexcept {
+        const u32 offset = (instruction & 0x7FU) << 2U;
+        if ((instruction & 0x80U) != 0U) {
+            regs_[kRegSP] -= offset;
+        } else {
+            regs_[kRegSP] += offset;
+        }
+    }
+
     // -------------------------- fetch/decode/dispatch --------------------------
 
     void ARM7TDMI::step() noexcept {
@@ -655,7 +745,7 @@ namespace gba {
             u16 pattern;
             void (ARM7TDMI::*handler)(u16) noexcept;
         };
-        static constexpr std::array<DecoderEntry, 26> kDecoder{{
+        static constexpr std::array<DecoderEntry, 31> kDecoder{{
             {0xFFC0U, 0x4000U, &ARM7TDMI::exec_and},
             {0xFFC0U, 0x4040U, &ARM7TDMI::exec_eor},
             {0xFFC0U, 0x4300U, &ARM7TDMI::exec_orr},
@@ -674,6 +764,11 @@ namespace gba {
             {0xF800U, 0x3000U, &ARM7TDMI::exec_add_imm},
             {0xF800U, 0x3800U, &ARM7TDMI::exec_sub_imm},
             {0xF800U, 0x4800U, &ARM7TDMI::exec_ldr_literal},
+            {0xF000U, 0x5000U, &ARM7TDMI::exec_memory_register},
+            {0xF000U, 0x8000U, &ARM7TDMI::exec_memory_halfword},
+            {0xF000U, 0x9000U, &ARM7TDMI::exec_memory_stack},
+            {0xF000U, 0xA000U, &ARM7TDMI::exec_relative_address},
+            {0xFF00U, 0xB000U, &ARM7TDMI::exec_adjust_stack},
             {0xF800U, 0x6000U, &ARM7TDMI::exec_str_imm_w},
             {0xF800U, 0x6800U, &ARM7TDMI::exec_ldr_imm_w},
             {0xF800U, 0x7000U, &ARM7TDMI::exec_str_imm_b},
