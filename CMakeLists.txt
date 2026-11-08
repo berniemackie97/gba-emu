@@ -31,3 +31,14 @@ foreach(test_src IN LISTS TEST_SOURCES)
     target_link_libraries("${test_name}_test" PRIVATE gba_core GTest::gtest GTest::gtest_main)
     gtest_discover_tests("${test_name}_test")
 endforeach()
+
+foreach(scenario IN ITEMS startup invalid-video invalid-arguments)
+    add_test(
+        NAME "Frontend.${scenario}"
+        COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:gba_sdl>"
+            "-DSCENARIO=${scenario}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/frontend_smoke.cmake"
+    )
+    set_tests_properties("Frontend.${scenario}" PROPERTIES LABELS "frontend;smoke" TIMEOUT 30)
+endforeach()
