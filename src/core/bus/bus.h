@@ -11,13 +11,15 @@ namespace gba {
         void reset() noexcept { mmu_.reset(); }
 
         // BIOS plumbing exposed for tests & future UI
-        [[nodiscard]] auto load_bios(const std::filesystem::path &file) noexcept -> bool {
-            return mmu_.load_bios(file);
+        [[nodiscard]] auto load_bios(const std::filesystem::path &file, ImageLoadError *error = nullptr) noexcept -> bool {
+            return mmu_.load_bios(file, error);
         }
-        [[nodiscard]] auto load_gamepak(const std::filesystem::path &file) noexcept -> bool {
-            return mmu_.load_gamepak(file);
+        [[nodiscard]] auto load_gamepak(const std::filesystem::path &file, ImageLoadError *error = nullptr) noexcept -> bool {
+            return mmu_.load_gamepak(file, error);
         }
-        void load_gamepak(std::span<const u8> bytes) noexcept { mmu_.load_gamepak(bytes); }
+        [[nodiscard]] auto load_gamepak(std::span<const u8> bytes, ImageLoadError *error = nullptr) noexcept -> bool {
+            return mmu_.load_gamepak(bytes, error);
+        }
 
         // I/O debug hook passthroughs
         void debug_set_vcount_for_tests(std::uint16_t scanline) noexcept { mmu_.debug_set_vcount_for_tests(scanline); }
