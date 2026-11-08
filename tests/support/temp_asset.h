@@ -27,7 +27,9 @@ class TempAsset {
         if (!stream) {
             return false;
         }
-        stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!bytes.empty()) {
+            stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        }
         stream.flush();
         return stream.good();
     }
