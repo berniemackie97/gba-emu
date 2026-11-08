@@ -1,6 +1,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <span>
 #include <vector>
@@ -126,11 +127,20 @@ TEST(GamePak, AcceptsMaximumWindowSizedFile) {
     std::filesystem::resize_file(file.path(), MMU::WS_REGION_SIZE_32MiB, resizeError);
     ASSERT_FALSE(resizeError);
 
+    constexpr u8 kLastByte = 0xC7U;
+    {
+        std::fstream stream(file.path(), std::ios::binary | std::ios::in | std::ios::out);
+        ASSERT_TRUE(stream.is_open());
+        stream.seekp(static_cast<std::streamoff>(MMU::WS_REGION_SIZE_32MiB - 1U));
+        stream.put(static_cast<char>(kLastByte));
+        ASSERT_TRUE(stream.good());
+    }
+
     MMU mmu;
     mmu.reset();
     gba::ImageLoadError error = gba::ImageLoadError::TooLarge;
     ASSERT_TRUE(mmu.load_gamepak(file.path(), &error));
     EXPECT_EQ(error, gba::ImageLoadError::None);
     EXPECT_EQ(mmu.read8(MMU::WS0_BASE), header.front());
-    EXPECT_EQ(mmu.read8(MMU::WS2_BASE + MMU::WS_REGION_SIZE_32MiB - 1U), 0U);
+    EXPECT_EQ(mmu.read8(MMU::WS2_BASE + MMU::WS_REGION_SIZE_32MiB - 1U), kLastByte);
 }
