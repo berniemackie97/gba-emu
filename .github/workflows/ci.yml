@@ -132,7 +132,7 @@ jobs:
       - name: Collect coverage
         run: |
           lcov --capture --directory build/default/CMakeFiles/gba_core.dir --output-file coverage.raw.info
-          lcov --remove coverage.raw.info '/usr/*' '*/build/*' '*/tests/*' --output-file coverage.info
+          lcov --remove coverage.raw.info '/usr/*' --output-file coverage.info
           lcov --list coverage.info
       - name: Upload coverage
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
