@@ -54,7 +54,9 @@ namespace gba {
 
         void reset() noexcept {
             std::ranges::fill(raw_, u8{0x00});
-            vcount_ = 0; // PPU will drive this later; 0..227 lines on GBA
+            vcount_ = 0;
+            hblank_ = false;
+            dispstat_shadow_ = 0;
         }
 
         // ---- 8/16/32-bit API (offset is relative to 0x04000000) ----

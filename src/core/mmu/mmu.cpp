@@ -14,6 +14,9 @@ namespace gba {
         constexpr u32 kHalfBits = 16U;
         constexpr u32 kThreeBytes = 24U;
         constexpr u32 kByteMask = 0xFFU;
+        constexpr u32 kDisplayModeMask = 0x7U;
+        constexpr std::size_t kObjectTileBase = 0x10000U;
+        constexpr std::size_t kObjectBitmapBase = 0x14000U;
     } // namespace
 
     void MMU::reset() noexcept {
@@ -105,11 +108,11 @@ namespace gba {
         }
 
         // Work RAM
-        if (in(addr, EWRAM_BASE, EWRAM_SIZE)) {
-            return ewram_.at(static_cast<std::size_t>(addr - EWRAM_BASE));
+        if (in_window(addr, EWRAM_BASE, kWindow16MiB)) {
+            return ewram_.at(static_cast<std::size_t>((addr - EWRAM_BASE) & (EWRAM_SIZE - 1U)));
         }
-        if (in(addr, IWRAM_BASE, IWRAM_SIZE)) {
-            return iwram_.at(static_cast<std::size_t>(addr - IWRAM_BASE));
+        if (in_window(addr, IWRAM_BASE, kWindow16MiB)) {
+            return iwram_.at(static_cast<std::size_t>((addr - IWRAM_BASE) & (IWRAM_SIZE - 1U)));
         }
 
         // I/O (stub)
@@ -123,8 +126,7 @@ namespace gba {
             return pal_.at(pal_offset(addr));
         }
 
-        // VRAM: 96 KiB valid + 32 KiB alias to first 32 KiB in 128 KiB window
-        if (in_window(addr, VRAM_BASE, kVRAMWindow128KiB)) {
+        if (in_window(addr, VRAM_BASE, kWindow16MiB)) {
             return vram_.at(vram_offset(addr));
         }
 
@@ -145,14 +147,40 @@ namespace gba {
     }
 
     void MMU::write8(u32 addr, u8 value) noexcept {
-        // BIOS is read-only: ignore writes
-
-        if (in(addr, EWRAM_BASE, EWRAM_SIZE)) {
-            ewram_.at(static_cast<std::size_t>(addr - EWRAM_BASE)) = value;
+        if (in_window(addr, PAL_BASE, kWindow16MiB)) {
+            const auto offset = pal_offset(addr) & ~std::size_t{1};
+            pal_[offset] = value;
+            pal_[offset + 1U] = value;
             return;
         }
-        if (in(addr, IWRAM_BASE, IWRAM_SIZE)) {
-            iwram_.at(static_cast<std::size_t>(addr - IWRAM_BASE)) = value;
+        if (in_window(addr, VRAM_BASE, kWindow16MiB)) {
+            const auto offset = vram_offset(addr);
+            const u32 mode = io_.read16(IORegs::kOffDISPCNT) & kDisplayModeMask;
+            const auto objectStart = (mode >= 3U && mode <= 5U) ? kObjectBitmapBase : kObjectTileBase;
+            if (offset >= objectStart) {
+                return;
+            }
+
+            const auto aligned = offset & ~std::size_t{1};
+            vram_[aligned] = value;
+            vram_[aligned + 1U] = value;
+            return;
+        }
+        if (in_window(addr, OAM_BASE, kWindow16MiB)) {
+            return;
+        }
+        write_storage8(addr, value);
+    }
+
+    void MMU::write_storage8(u32 addr, u8 value) noexcept {
+        // BIOS is read-only: ignore writes
+
+        if (in_window(addr, EWRAM_BASE, kWindow16MiB)) {
+            ewram_.at(static_cast<std::size_t>((addr - EWRAM_BASE) & (EWRAM_SIZE - 1U))) = value;
+            return;
+        }
+        if (in_window(addr, IWRAM_BASE, kWindow16MiB)) {
+            iwram_.at(static_cast<std::size_t>((addr - IWRAM_BASE) & (IWRAM_SIZE - 1U))) = value;
             return;
         }
         if (in(addr, IO_BASE, IO_SIZE)) {
@@ -161,15 +189,15 @@ namespace gba {
             return;
         }
         if (in_window(addr, PAL_BASE, kWindow16MiB)) {
-            pal_.at(pal_offset(addr)) = value; // hardware prefers 16/32-bit; 8-bit ok for tests
+            pal_.at(pal_offset(addr)) = value;
             return;
         }
-        if (in_window(addr, VRAM_BASE, kVRAMWindow128KiB)) {
-            vram_.at(vram_offset(addr)) = value; // hardware prefers 16/32-bit; 8-bit ok for tests
+        if (in_window(addr, VRAM_BASE, kWindow16MiB)) {
+            vram_.at(vram_offset(addr)) = value;
             return;
         }
         if (in_window(addr, OAM_BASE, kWindow16MiB)) {
-            oam_.at(oam_offset(addr)) = value; // hardware prefers 16/32-bit; 8-bit ok for tests
+            oam_.at(oam_offset(addr)) = value;
             return;
         }
         if (in_any_ws(addr)) {
@@ -188,8 +216,8 @@ namespace gba {
     }
 
     void MMU::write16(u32 addr, std::uint16_t value) noexcept {
-        write8(addr, static_cast<u8>(value & kByteMask));
-        write8(addr + 1, static_cast<u8>((value >> kByteBits) & kByteMask));
+        write_storage8(addr, static_cast<u8>(value & kByteMask));
+        write_storage8(addr + 1, static_cast<u8>((value >> kByteBits) & kByteMask));
     }
 
     // ---- 32-bit access (little-endian; unaligned allowed) ----
@@ -204,10 +232,10 @@ namespace gba {
     }
 
     void MMU::write32(u32 addr, std::uint32_t value) noexcept {
-        write8(addr + 0, static_cast<u8>(value & kByteMask));
-        write8(addr + 1, static_cast<u8>((value >> kByteBits) & kByteMask));
-        write8(addr + 2, static_cast<u8>((value >> kHalfBits) & kByteMask));
-        write8(addr + 3, static_cast<u8>((value >> kThreeBytes) & kByteMask));
+        write_storage8(addr + 0, static_cast<u8>(value & kByteMask));
+        write_storage8(addr + 1, static_cast<u8>((value >> kByteBits) & kByteMask));
+        write_storage8(addr + 2, static_cast<u8>((value >> kHalfBits) & kByteMask));
+        write_storage8(addr + 3, static_cast<u8>((value >> kThreeBytes) & kByteMask));
     }
 
 } // namespace gba
