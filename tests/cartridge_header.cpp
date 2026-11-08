@@ -1,6 +1,7 @@
 #include <array>
 #include <cstdint>
 #include <gtest/gtest.h>
+#include <span>
 
 #include "core/content/cartridge_header.h"
 #include "core/content/file_image.h"
