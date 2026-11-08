@@ -59,6 +59,10 @@ ctest --preset default --output-on-failure
 ./build/default/gba_sdl
 ```
 
+The frontend currently opens an SDL window but does not yet render emulated
+frames or execute a game. Close the window to exit. Use `gba_sdl --smoke-test`
+for a deterministic headless lifecycle check.
+
 **Note:** Place your GBA BIOS at `assets/gba_bios.bin`. ROMs go in `assets/` or outside the repo (both are `.gitignored`).
 
 ## Project Structure

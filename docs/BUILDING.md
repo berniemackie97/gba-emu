@@ -37,3 +37,22 @@ generators in one configured build directory.
 GitHub Actions tests Debug and Release on GCC, Clang, MSVC and Apple Clang.
 Static analysis, coverage, sanitizers and the aggregate Quality Gate
 must also pass.
+
+## Frontend smoke verification
+
+The SDL executable creates a 480 x 320 window and waits for a close event.
+It does not yet execute a GBA game or present emulated frames.
+
+```sh
+ctest --preset default -L frontend --output-on-failure
+```
+
+On Windows:
+
+```powershell
+ctest --preset windows --build-config Debug -L frontend --output-on-failure
+```
+
+CTest runs the executable using SDL's dummy video driver and an explicit
+`--smoke-test` shutdown event, then verifies initialization failure and
+invalid-argument exit codes. These tests require no display or BIOS image.
