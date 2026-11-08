@@ -8,7 +8,7 @@
 
 namespace gba {
 
-enum class ImageLoadError {
+enum class ImageLoadError : std::uint8_t {
     None,
     Unavailable,
     NotRegularFile,
@@ -23,9 +23,13 @@ struct FileImageLoad {
     std::vector<std::uint8_t> bytes;
 };
 
+struct FileImageLimits {
+    std::uintmax_t minimum;
+    std::uintmax_t maximum;
+};
+
 [[nodiscard]] auto image_load_error_message(ImageLoadError error) noexcept -> std::string_view;
 
-[[nodiscard]] auto read_file_image(const std::filesystem::path &path, std::uintmax_t minimum_size,
-                                   std::uintmax_t maximum_size) noexcept -> FileImageLoad;
+[[nodiscard]] auto read_file_image(const std::filesystem::path &path, FileImageLimits limits) noexcept -> FileImageLoad;
 
 } // namespace gba
