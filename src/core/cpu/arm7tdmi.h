@@ -145,7 +145,7 @@ namespace gba {
         // LDR word: read aligned word then rotate right by 8 * (addr & 3)
         [[nodiscard]] auto read_u32_unaligned(u32 addr) const noexcept -> u32;
 
-        // STR word: rotate left by 8 * (addr & 3) then write at aligned address
+        // STR word: align down; store original value without rotating
         // NOLINTNEXTLINE(bugprone-easily-swappable-parameters) — (address, value) matches bus API
         void write_u32_unaligned(u32 addr, u32 value) noexcept;
 
@@ -154,7 +154,15 @@ namespace gba {
         void exec_ldr_imm_w(u16 insn) noexcept;   // 01101 LDR  Rd, [Rb, #imm5*4]
         void exec_str_imm_w(u16 insn) noexcept;   // 01100 STR  Rd, [Rb, #imm5*4]
         void exec_ldr_imm_b(u16 insn) noexcept;   // 01111 LDRB Rd, [Rb, #imm5]
-        void exec_str_imm_b(u16 insn) noexcept;   // 01110 STRB Rd, [Rb, #imm5]
+        void exec_str_imm_b(u16 insn) noexcept;
+
+        [[nodiscard]] auto read_u16_unaligned(u32 address) const noexcept -> u32;
+        void write_u16_aligned(u32 address, u16 value) noexcept;
+        void exec_memory_register(u16 instruction) noexcept;
+        void exec_memory_halfword(u16 instruction) noexcept;
+        void exec_memory_stack(u16 instruction) noexcept;
+        void exec_relative_address(u16 instruction) noexcept;
+        void exec_adjust_stack(u16 instruction) noexcept;   // 01110 STRB Rd, [Rb, #imm5]
     };
 
 } // namespace gba
