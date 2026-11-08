@@ -74,3 +74,70 @@ TEST(IORegs, DispstatFlagsAndLycCompare) {
     mmu.debug_set_hblank_for_tests(false);
     EXPECT_EQ(mmu.read16(dispstatAddr) & kFlagHBlank, 0U);
 }
+
+TEST(IORegs, ResetClearsLiveTimingFlagsAndWritableDispstatState) {
+    MMU mmu;
+    mmu.reset();
+
+    constexpr auto dispstat = MMU::IO_BASE + IORegs::kOffDISPSTAT;
+    constexpr auto dispcnt = MMU::IO_BASE + IORegs::kOffDISPCNT;
+    constexpr auto vcount = MMU::IO_BASE + IORegs::kOffVCOUNT;
+
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        mmu.write16(dispcnt, 0x1234U);
+        mmu.write16(dispstat, 0xFF38U);
+        mmu.debug_set_hblank_for_tests(true);
+        mmu.debug_set_vcount_for_tests(200U);
+
+        EXPECT_EQ(mmu.read16(dispstat), 0xFF3BU);
+        EXPECT_EQ(mmu.read16(vcount), 200U);
+
+        mmu.reset();
+
+        EXPECT_EQ(mmu.read16(dispcnt), 0U);
+        EXPECT_EQ(mmu.read16(vcount), 0U);
+        EXPECT_EQ(mmu.read16(dispstat), IORegs::kDispstatFlagVCount);
+        EXPECT_EQ(mmu.read8(dispstat + 1U), 0U);
+        EXPECT_EQ(mmu.read16(dispstat) & IORegs::kDispstatFlagHBlank, 0U);
+        EXPECT_EQ(mmu.read16(dispstat) & IORegs::kDispstatFlagVBlank, 0U);
+    }
+}
+
+TEST(IORegs, DispstatWriteMaskAndLiveFlagsSurviveModeWrites) {
+    MMU mmu;
+    mmu.reset();
+
+    constexpr auto dispstat = MMU::IO_BASE + IORegs::kOffDISPSTAT;
+
+    mmu.write8(dispstat, 0xFFU);
+    EXPECT_EQ(mmu.read16(dispstat), 0x003CU);
+    mmu.write8(dispstat + 1U, 0x48U);
+    EXPECT_EQ(mmu.read16(dispstat), 0x4838U);
+
+    mmu.debug_set_vcount_for_tests(0x48U);
+    EXPECT_EQ(mmu.read16(dispstat), 0x483CU);
+    mmu.debug_set_hblank_for_tests(true);
+    EXPECT_EQ(mmu.read16(dispstat), 0x483EU);
+
+    mmu.write16(dispstat, 0x0000U);
+    EXPECT_EQ(mmu.read16(dispstat), IORegs::kDispstatFlagHBlank | IORegs::kDispstatFlagVCount);
+    mmu.debug_set_hblank_for_tests(false);
+    EXPECT_EQ(mmu.read16(dispstat), 0U);
+}
+
+TEST(IORegs, FreshInstanceMatchesPreviouslyUsedThenResetInstance) {
+    MMU used;
+    used.reset();
+    used.debug_set_hblank_for_tests(true);
+    used.debug_set_vcount_for_tests(190U);
+    used.write16(MMU::IO_BASE + IORegs::kOffDISPSTAT, 0x2238U);
+    used.reset();
+
+    MMU fresh;
+    fresh.reset();
+
+    EXPECT_EQ(used.read16(MMU::IO_BASE + IORegs::kOffDISPSTAT),
+              fresh.read16(MMU::IO_BASE + IORegs::kOffDISPSTAT));
+    EXPECT_EQ(used.read16(MMU::IO_BASE + IORegs::kOffVCOUNT),
+              fresh.read16(MMU::IO_BASE + IORegs::kOffVCOUNT));
+}
