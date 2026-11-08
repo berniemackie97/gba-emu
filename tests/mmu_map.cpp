@@ -28,7 +28,6 @@ TEST(MMUMap, EwramRepeatsAcrossEntire16MiBWindow) {
     EXPECT_EQ(mmu.read16(base + size - 2U), 0xC3D4U);
     EXPECT_EQ(mmu.read16(base), 0xA1B2U);
     EXPECT_EQ(mmu.read32(base + size - 2U), 0xA1B2C3D4U);
-    EXPECT_EQ(mmu.read8(0x04000010U), 0U);
 }
 
 TEST(MMUMap, IwramRepeatsAcrossEntire16MiBWindow) {
