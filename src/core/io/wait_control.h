@@ -18,7 +18,7 @@ class WaitControlRegisters {
     }
 
     void write8(std::uint32_t offset, std::uint8_t value) noexcept {
-        control_ = write_register_byte(control_, offset, value, kWritable);
+        control_ = write_register_byte(control_, {.lane = offset, .value = value, .writable_mask = kWritable});
     }
 
   private:
