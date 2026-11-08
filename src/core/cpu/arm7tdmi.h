@@ -157,7 +157,6 @@ namespace gba {
         void exec_str_imm_b(u16 insn) noexcept;
 
         [[nodiscard]] auto read_u16_unaligned(u32 address) const noexcept -> u32;
-        void write_u16_aligned(u32 address, u16 value) noexcept;
         void exec_memory_register(u16 instruction) noexcept;
         void exec_memory_halfword(u16 instruction) noexcept;
         void exec_memory_stack(u16 instruction) noexcept;
