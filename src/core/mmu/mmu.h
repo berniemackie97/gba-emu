@@ -43,7 +43,7 @@ namespace gba {
         static constexpr u32 WS1_BASE = 0x0A000000U;
         static constexpr u32 WS2_BASE = 0x0C000000U;
         static constexpr u32 WS_REGION_SIZE_32MiB = 0x02000000U; // 32 MiB per region
-        static constexpr std::size_t GAMEPAK_HEADER_SIZE = 0xC0U;
+        static constexpr std::size_t GAMEPAK_HEADER_SIZE = CartridgeHeader::kSize;
 
         // --- Window constants used for aliasing behaviour (names beat hex) ---
         static constexpr u32 kWindow16MiB = 0x01000000U;                     // internal RAM/video region windows
