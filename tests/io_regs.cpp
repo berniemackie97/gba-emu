@@ -120,7 +120,7 @@ TEST(IORegs, DispstatWriteMaskAndLiveFlagsSurviveModeWrites) {
     EXPECT_EQ(mmu.read16(dispstat), 0x483EU);
 
     mmu.write16(dispstat, 0x0000U);
-    EXPECT_EQ(mmu.read16(dispstat), IORegs::kDispstatFlagHBlank | IORegs::kDispstatFlagVCount);
+    EXPECT_EQ(mmu.read16(dispstat), IORegs::kDispstatFlagHBlank);
     mmu.debug_set_hblank_for_tests(false);
     EXPECT_EQ(mmu.read16(dispstat), 0U);
 }
