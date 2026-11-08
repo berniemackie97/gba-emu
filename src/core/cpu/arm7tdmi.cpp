@@ -8,7 +8,13 @@ namespace gba {
 
     void ARM7TDMI::reset() noexcept {
         regs_.fill(0U);
-        cpsr_ = kFlagT; // start in Thumb state
+        cpsr_ = kFlagT;
+        fault_ = {};
+    }
+
+    void ARM7TDMI::record_fault(FaultKind kind, u32 instructionAddress, u16 instruction) noexcept {
+        fault_ = {kind, instructionAddress, instruction, cpsr_};
+        regs_[kRegPC] = instructionAddress;
     }
 
     // -------------------------- flag helpers --------------------------
@@ -232,12 +238,8 @@ namespace gba {
 
     void ARM7TDMI::exec_b(u16 insn) noexcept {
         // imm11 in bits [10:0], target = sign_extend((imm11 << 1))
-        constexpr u16 kImm11Mask = 0x07FFU;
-        constexpr u32 kAlignShift = 1U;
-        const u32 imm11 = insn & kImm11Mask;
-        const u32 offset12 = imm11 << kAlignShift;
-        const u32 signedOff = sign_extend12(offset12);
-        regs_[kRegPC] += signedOff; // PC already advanced by fetch
+        const u32 offset12 = static_cast<u32>(insn & kImm11Mask) << 1U;
+        regs_[kRegPC] = thumb_pc() + sign_extend(offset12, 12U);
     }
 
     // -------------------------- Thumb Format 2: Add/Subtract --------------------------
@@ -438,12 +440,10 @@ namespace gba {
         const u32 offsetBytes = imm8Words << 2U;
 
         // We fetched at PC_old; step() has advanced PC to PC_old + 2 here.
-        const u32 pcAfterFetch = regs_[kRegPC];
-        const u32 pcForLdr = (pcAfterFetch + 2U) & kWordMask; // (addr+4) aligned
+        const u32 pcForLdr = thumb_pc() & kWordMask;
 
         const u32 address = pcForLdr + offsetBytes;
         regs_.at(destReg) = read_u32_unaligned(address);
-        set_nz(regs_.at(destReg));
     }
 
     // 01101 LDR Rd, [Rb, #imm5*4]
@@ -454,7 +454,6 @@ namespace gba {
         const u32 address = regs_.at(baseReg) + (imm5Words << 2U);
 
         regs_.at(destReg) = read_u32_unaligned(address);
-        set_nz(regs_.at(destReg));
     }
 
     // 01100 STR Rd, [Rb, #imm5*4]
@@ -476,7 +475,6 @@ namespace gba {
         const u32 address = regs_.at(baseReg) + imm5;
 
         regs_.at(destReg) = static_cast<u32>(bus_->read8(address));
-        set_nz(regs_.at(destReg)); // C/V unaffected
     }
 
     // 01110 STRB Rd, [Rb, #imm5]
@@ -555,16 +553,7 @@ namespace gba {
             const u32 targetAddr = bus_->read32(addr);
             addr += 4U;
 
-            // Bit 0 determines Thumb/ARM state (should always be 1 for Thumb)
-            if ((targetAddr & 0x1U) != 0U) {
-                // Stay in Thumb - clear bit 0 for halfword alignment
-                regs_[kRegPC] = targetAddr & ~0x1U;
-                cpsr_ |= kFlagT;
-            } else {
-                // Switch to ARM mode (not yet implemented, but set PC anyway)
-                regs_[kRegPC] = targetAddr & ~0x3U; // word aligned
-                cpsr_ &= ~kFlagT;
-            }
+            regs_[kRegPC] = targetAddr & ~u32{1};
         }
 
         // Update SP
@@ -580,9 +569,7 @@ namespace gba {
         const u32 cond = (insn >> 8U) & 0xFU;    // bits 8-11: condition
         const u32 imm8 = insn & 0xFFU;           // bits 0-7: offset
 
-        // Sign-extend 8-bit to 32-bit, then shift left by 1 (halfword offset)
-        const auto signedOff8 = static_cast<std::int8_t>(imm8);
-        const auto signedOff = static_cast<std::int32_t>(signedOff8) << 1;
+        const u32 signedOffset = sign_extend(imm8 << 1U, 9U);
 
         // Evaluate condition based on CPSR flags
         bool conditionMet = false;
@@ -607,15 +594,13 @@ namespace gba {
             case 0xBU: conditionMet = (N != V);         break; // BLT: N != V (signed <)
             case 0xCU: conditionMet = !Z && (N == V);   break; // BGT: Z clear AND N == V (signed >)
             case 0xDU: conditionMet = Z || (N != V);    break; // BLE: Z set OR N != V (signed <=)
-            case 0xEU: conditionMet = true;             break; // BAL: always (undefined in Thumb)
-            case 0xFU: conditionMet = false;            break; // Reserved (SWI in some docs)
-            default: break;
+            default: return;
         }
 
         // Branch if condition met
         if (conditionMet) {
             // PC was already advanced by fetch, so offset is relative to current PC
-            regs_[kRegPC] = static_cast<u32>(static_cast<std::int32_t>(regs_[kRegPC]) + signedOff);
+            regs_[kRegPC] = thumb_pc() + signedOffset;
         }
         // flags unaffected
     }
@@ -623,8 +608,19 @@ namespace gba {
     // -------------------------- fetch/decode/dispatch --------------------------
 
     void ARM7TDMI::step() noexcept {
-        // Fetch Thumb16 at PC, then advance PC by 2
+        if (fault_.kind != FaultKind::None) {
+            return;
+        }
         const u32 fetchAddr = regs_[kRegPC];
+        if (bus_ == nullptr) {
+            record_fault(FaultKind::MissingBus, fetchAddr, 0U);
+            return;
+        }
+        if ((cpsr_ & kFlagT) == 0U) {
+            record_fault(FaultKind::UnsupportedArmState, fetchAddr, 0U);
+            return;
+        }
+
         const u16 insn = bus_->read16(fetchAddr);
         regs_[kRegPC] = fetchAddr + 2U;
 
@@ -637,7 +633,7 @@ namespace gba {
         // For Format 4 ALU, we need top 10 bits (0b010000_xxxx_xxxxxx)
         const u16 top10 = static_cast<u16>(insn & 0xFFC0U);
         // For Format 14 (PUSH/POP), we need top 7 bits + bit 3 (0b1011_x10_xxxxxxxxx)
-        const u16 top7_pushpop = static_cast<u16>(insn & 0xF600U);
+        const u16 top7_pushpop = static_cast<u16>(insn & 0xFE00U);
         // For Format 16 (Bcond), we need top 4 bits (0b1101_xxxx_xxxxxxxx)
         const u16 top4 = static_cast<u16>(insn & 0xF000U);
 
@@ -678,7 +674,7 @@ namespace gba {
 
         // Format 14: PUSH/POP (top 7 bits + bit 3)
         constexpr u16 kPush = 0xB400U;      // 1011010
-        constexpr u16 kPop = 0xB600U;       // 1011110 (note: bit 3 is set for POP)
+        constexpr u16 kPop = 0xBC00U;
 
         // Format 16: Conditional branch (top 4 bits)
         constexpr u16 kBCond = 0xD000U;     // 1101
@@ -702,10 +698,14 @@ namespace gba {
             exec_mov_high(insn);
         } else if (top8 == kBX) {
             exec_bx(insn);
-        } else if (top7_pushpop == kPush) {
-            exec_push(insn);
-        } else if (top7_pushpop == kPop) {
-            exec_pop(insn);
+        } else if (top7_pushpop == kPush || top7_pushpop == kPop) {
+            if ((insn & 0x1FFU) == 0U) {
+                record_fault(FaultKind::UndefinedThumb, fetchAddr, insn);
+            } else if (top7_pushpop == kPush) {
+                exec_push(insn);
+            } else {
+                exec_pop(insn);
+            }
         } else if (top7 == kAddReg) {
             exec_add_reg(insn);
         } else if (top7 == kSubReg) {
@@ -733,7 +733,14 @@ namespace gba {
         } else if (top5 == kLdrImmB) {
             exec_ldr_imm_b(insn);
         } else if (top4 == kBCond) {
-            exec_bcond(insn);
+            const u32 condition = (insn >> 8U) & 0xFU;
+            if (condition == 0xEU) {
+                record_fault(FaultKind::UndefinedThumb, fetchAddr, insn);
+            } else if (condition == 0xFU) {
+                record_fault(FaultKind::UnsupportedThumb, fetchAddr, insn);
+            } else {
+                exec_bcond(insn);
+            }
         } else if (top5 == kBranch) {
             exec_b(insn);
         } else if (top5 == kLslImm) {
@@ -743,7 +750,7 @@ namespace gba {
         } else if (top5 == kAsrImm) {
             exec_asr_imm(insn);
         } else {
-            // NOP for unimplemented in this milestone
+            record_fault(FaultKind::UnsupportedThumb, fetchAddr, insn);
         }
     }
 
