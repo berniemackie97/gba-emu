@@ -62,6 +62,6 @@ ctest "${test_args[@]}"
 
 if ((coverage)); then
     lcov --capture --directory build/default/CMakeFiles/gba_core.dir --output-file coverage.raw.info
-    lcov --remove coverage.raw.info '/usr/*' '*/build/*' '*/tests/*' --output-file coverage.info
+    lcov --remove coverage.raw.info '/usr/*' --output-file coverage.info
     lcov --list coverage.info
 fi
