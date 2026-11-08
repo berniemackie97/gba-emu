@@ -34,7 +34,7 @@ TEST(CoreSmoke, ResetLoadExecuteAndShutdown) {
     cpu.step();
 
     EXPECT_EQ(cpu.debug_reg(0), 6U);
-    EXPECT_EQ(cpu.debug_pc(), gba::MMU::WS0_BASE + program.size() * 1U);
+    EXPECT_EQ(cpu.debug_pc(), gba::MMU::WS0_BASE + static_cast<std::uint32_t>(program.size()));
 
     cpu.reset();
     bus.reset();
