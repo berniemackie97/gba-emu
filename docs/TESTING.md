@@ -1,24 +1,37 @@
 # Testing
 
-Unit tests are organized by subsystem. Each file in `tests/*.cpp` builds into its own test binary
-using `gtest_discover_tests`, so new test files are auto‑collected.
+Unit and integration tests use GoogleTest and CTest discovery. Frontend
+lifecycle scenarios run the real SDL executable under the dummy video driver.
 
-## Running
+## Run the complete suite
 
-```powershell
-cmake --build --preset default -j
+Linux and macOS:
+
+```sh
+cmake --build --preset default --parallel
 ctest --preset default --output-on-failure
 ```
 
-## Conventions
+Windows (Visual Studio 2022):
 
-- No magic numbers: tests define symbols alongside expectations (e.g., `constexpr u16 kValueA1B2 = 0xA1B2;`).  
-- Tests read like specifications: comments state the hardware rule being exercised.
-- Prefer checking **both** the direct address and its mirror to prove aliasing behavior.
+```powershell
+cmake --build --preset windows --config Debug --parallel
+ctest --preset windows --build-config Debug --output-on-failure
+```
 
-## Current suites
+## Asset safety regressions
 
-- `bios_load_test` — BIOS load and mapping.  
-- `mmu_map_test` — Region boundaries and mirroring for PAL/VRAM/OAM.  
-- `mmu_width_test` — 8/16/32‑bit access semantics, including unaligned behavior.  
-- `cart_map_test` — Game Pak ROM mapping and write‑ignore behavior.
+`bios_load_test` and `cart_map_test` use generated binary fixtures, so
+they do not require copyrighted BIOS or game data. They verify exact
+BIOS sizing, the 192-byte minimum for file-backed cartridges, the
+32 MiB upper bound, regular-file requirements, structured failure
+codes, preserved loaded state and successful retry. Tiny in-memory
+instruction images have a separate test contract.
+
+`core_smoke_test` exercises reset, generated cartridge load, instruction
+execution and reset. `Frontend.startup`, `Frontend.invalid-video` and
+`Frontend.invalid-arguments` are CTest scenarios for process lifetime and
+exit behavior.
+
+Passing these tests does not imply complete ARM7TDMI, memory-map or
+commercial game compatibility.

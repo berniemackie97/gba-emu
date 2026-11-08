@@ -2,10 +2,9 @@
 #include "core/mmu/mmu.h"
 
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
+#include <new>
 #include <ranges>
+#include <stdexcept>
 
 namespace gba {
 
@@ -31,45 +30,55 @@ namespace gba {
 
     // ------------------------------ LOADERS -------------------------------------------
 
-    // Read BIOS (<=16 KiB). If file is shorter, remaining bytes become 0x00.
-    auto MMU::load_bios(const std::filesystem::path &file) noexcept -> bool {
-        std::ifstream ifs(file, std::ios::binary);
-        if (!ifs) {
-            return false;
+    namespace {
+        [[nodiscard]] auto finish_load(ImageLoadError *output, ImageLoadError result) noexcept -> bool {
+            if (output != nullptr) {
+                *output = result;
+            }
+            return result == ImageLoadError::None;
+        }
+    }
+
+    auto MMU::load_bios(const std::filesystem::path &file, ImageLoadError *error) noexcept -> bool {
+        const auto loaded = read_file_image(file, FileImageLimits{BIOS_SIZE, BIOS_SIZE});
+        if (loaded.error != ImageLoadError::None) {
+            return finish_load(error, loaded.error);
         }
 
-        std::array<char, BIOS_SIZE> tmp{};
-        ifs.read(tmp.data(), static_cast<std::streamsize>(tmp.size()));
-        const auto got = static_cast<std::size_t>(ifs.gcount());
-
-        // Copy (char->u8)
-        std::transform(tmp.begin(), tmp.begin() + static_cast<std::ptrdiff_t>(got), bios_.begin(),
-                       [](char srcChar) -> u8 { return static_cast<u8>(srcChar); });
-
-        // Zero the tail if the BIOS file was short
-        if (got < BIOS_SIZE) {
-            auto tail = std::ranges::subrange(bios_.begin() + static_cast<std::ptrdiff_t>(got), bios_.end());
-            std::ranges::fill(tail, u8{0x00});
-        }
-
+        std::copy(loaded.bytes.begin(), loaded.bytes.end(), bios_.begin());
         bios_loaded_ = true;
-        return true;
+        return finish_load(error, ImageLoadError::None);
     }
 
-    auto MMU::load_gamepak(const std::filesystem::path &file) noexcept -> bool {
-        std::ifstream ifs(file, std::ios::binary);
-        if (!ifs) {
-            return false;
+    auto MMU::load_gamepak(const std::filesystem::path &file, ImageLoadError *error) noexcept -> bool {
+        auto loaded = read_file_image(file, FileImageLimits{GAMEPAK_HEADER_SIZE, WS_REGION_SIZE_32MiB});
+        if (loaded.error != ImageLoadError::None) {
+            return finish_load(error, loaded.error);
         }
-        gamepak_.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
-        // Cast char bytes to u8 in place
-        for (auto &chr : gamepak_) {
-            chr = static_cast<u8>(chr);
-        }
-        return !gamepak_.empty();
+
+        gamepak_.swap(loaded.bytes);
+        return finish_load(error, ImageLoadError::None);
     }
 
-    void MMU::load_gamepak(std::span<const u8> bytes) noexcept { gamepak_.assign(bytes.begin(), bytes.end()); }
+    auto MMU::load_gamepak(std::span<const u8> bytes, ImageLoadError *error) noexcept -> bool {
+        if (bytes.empty()) {
+            return finish_load(error, ImageLoadError::TooSmall);
+        }
+        if (bytes.size() > WS_REGION_SIZE_32MiB) {
+            return finish_load(error, ImageLoadError::TooLarge);
+        }
+
+        try {
+            std::vector<u8> staged(bytes.begin(), bytes.end());
+            gamepak_.swap(staged);
+        } catch (const std::bad_alloc &) {
+            return finish_load(error, ImageLoadError::OutOfMemory);
+        } catch (const std::length_error &) {
+            return finish_load(error, ImageLoadError::OutOfMemory);
+        }
+
+        return finish_load(error, ImageLoadError::None);
+    }
 
     // ------------------------------ ADDRESS HELPERS -------------------------------------------
 

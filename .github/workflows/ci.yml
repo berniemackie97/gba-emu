@@ -73,7 +73,7 @@ jobs:
       - name: Configure
         run: cmake --preset default -DCMAKE_BUILD_TYPE=Debug
       - name: Run clang-tidy
-        run: clang-tidy -p build/default src/core/bus/bus.cpp src/core/cpu/arm7tdmi.cpp src/core/mmu/mmu.cpp src/core/io/io.cpp apps/sdl/main.cpp
+        run: find src/core apps/sdl -name '*.cpp' -print0 | xargs -0 clang-tidy -p build/default
 
   sanitizers:
     name: Sanitizer / ${{ matrix.sanitizer }}
