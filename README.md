@@ -30,10 +30,10 @@ See [docs/PROJECT_ASSESSMENT.md](docs/PROJECT_ASSESSMENT.md) for detailed status
 ### Build and Test
 
 ```powershell
-# Windows (PowerShell)
-cmake --preset default
-cmake --build --preset default -j
-ctest --preset default --output-on-failure
+# Windows (PowerShell, Visual Studio 2022)
+cmake --preset windows
+cmake --build --preset windows --config Debug --parallel
+ctest --preset windows --build-config Debug --output-on-failure
 
 # Or use the test runner script
 .\scripts\run_tests.ps1 -BuildType Debug -Verbose
@@ -41,9 +41,9 @@ ctest --preset default --output-on-failure
 
 ```bash
 # Linux/macOS
-cmake -B build -G Ninja
-cmake --build build -j
-ctest --test-dir build --output-on-failure
+cmake --preset default -DCMAKE_BUILD_TYPE=Debug
+cmake --build --preset default --parallel
+ctest --preset default --output-on-failure
 
 # Or use the test runner script
 ./scripts/run_tests.sh --build-type Debug --verbose
@@ -53,10 +53,10 @@ ctest --test-dir build --output-on-failure
 
 ```powershell
 # Windows
-.\build\Debug\gba_sdl.exe
+.\build\windows\Debug\gba_sdl.exe
 
 # Linux/macOS
-./build/gba_sdl
+./build/default/gba_sdl
 ```
 
 **Note:** Place your GBA BIOS at `assets/gba_bios.bin`. ROMs go in `assets/` or outside the repo (both are `.gitignored`).
@@ -122,10 +122,10 @@ This project follows a **test-driven development** approach with comprehensive u
 ctest --preset default --output-on-failure
 
 # Run specific test suite
-.\build\Debug\cpu_thumb_alu_test.exe
+.\build\windows\Debug\cpu_thumb_alu_test.exe
 
 # Run with filter
-.\build\Debug\cpu_flags_test.exe --gtest_filter=CPUFlags.ZeroFlagSetOnZeroResult
+.\build\windows\Debug\cpu_flags_test.exe --gtest_filter=CPUFlags.ZeroFlagSetOnZeroResult
 ```
 
 See [docs/TEST_INFRASTRUCTURE.md](docs/TEST_INFRASTRUCTURE.md) for comprehensive testing guide.

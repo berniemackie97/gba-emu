@@ -1,29 +1,54 @@
 {
-  "testPresets": [
-    {
-      "name": "ci",
-      "configurePreset": "ci"
-    }
-  ],
   "version": 4,
-  "buildPresets": [
-    {
-      "name": "ci",
-      "configurePreset": "ci"
-    }
-  ],
   "configurePresets": [
     {
-      "generator": "Ninja",
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
-        "CMAKE_MAKE_PROGRAM": "C:\\Users\\berni\\AppData\\Local\\Microsoft\\WinGet\\Links\\ninja.exe",
-        "CMAKE_TOOLCHAIN_FILE": "C:\\Users\\berni\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-        "CMAKE_C_COMPILER": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe"
-      },
-      "binaryDir": "/build",
-      "name": "ci",
-      "displayName": "MSVC + Ninja (pinned) + vcpkg (absolute)"
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "default",
+      "inherits": "base",
+      "displayName": "Ninja and vcpkg",
+      "generator": "Ninja"
+    },
+    {
+      "name": "windows",
+      "inherits": "base",
+      "displayName": "Visual Studio 2022 x64 and vcpkg",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "windows",
+      "configurePreset": "windows"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows",
+      "configurePreset": "windows",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

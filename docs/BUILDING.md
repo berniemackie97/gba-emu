@@ -1,22 +1,39 @@
 # Building
 
-We use CMake presets and vcpkg for dependencies (GoogleTest, SDL2).
+The build uses CMake 3.25+, C++20, vcpkg, SDL2 and GoogleTest.
 
-## Configure & build
+Set `VCPKG_ROOT` to an installed vcpkg checkout. Both presets use the
+`$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake` toolchain and `vcpkg.json`.
+Do not commit machine-specific compiler paths.
 
-```bash
-cmake -S . -B build --preset default
-cmake --build --preset default -j
-```
+## Linux and macOS
 
-## Run tests
-
-```bash
+```sh
+cmake --preset default -DCMAKE_BUILD_TYPE=Debug
+cmake --build --preset default --parallel
 ctest --preset default --output-on-failure
 ```
 
-## Notes
+Set `-DCMAKE_BUILD_TYPE=Release` for a Release build.
+`./scripts/run_tests.sh --build-type Debug` uses the same preset.
 
-- Windows: Visual Studio 2022 Community is fine (MSVC toolset).
-- macOS/Linux: any recent Clang or GCC works.
-- vcpkg is invoked automatically during configure when needed.
+## Windows
+
+Install Visual Studio 2022 and its C++ desktop workload. The `windows`
+preset selects the x64 Visual Studio generator without pinned paths.
+
+```powershell
+cmake --preset windows
+cmake --build --preset windows --config Debug --parallel
+ctest --preset windows --build-config Debug --output-on-failure
+```
+
+Use `--config Release` / `--build-config Release` to test release builds.
+`.\scripts\run_tests.ps1 -BuildType Debug` uses the same preset.
+
+Build output is in `build/default` or `build/windows`. Do not switch
+generators in one configured build directory.
+
+GitHub Actions tests Debug and Release on GCC, Clang, MSVC and Apple Clang.
+Static analysis, coverage, sanitizers and the aggregate Quality Gate
+must also pass.
