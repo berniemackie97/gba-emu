@@ -42,7 +42,7 @@ namespace {
     }
     constexpr auto Thumb_B_off11(std::int16_t offsetBytes) -> std::uint16_t {
         // offBytes must be even; imm11 holds signed (offBytes >> 1)
-        const auto imm11 = static_cast<std::uint16_t>((offsetBytes >> 1) & kImm11Mask);
+        const auto imm11 = static_cast<std::uint16_t>((static_cast<std::uint16_t>(offsetBytes) >> 1U) & kImm11Mask);
         return static_cast<std::uint16_t>((kTop5_B << kThumbTop5Shift) | imm11);
     }
 } // namespace
@@ -59,7 +59,7 @@ TEST(CPUThumb, MovAddSubAndBranch) {
         Thumb_MOV_imm(0U, 5U),    // r0 = 5
         Thumb_ADD_imm(0U, 3U),    // r0 = 8
         Thumb_SUB_imm(0U, 2U),    // r0 = 6
-        Thumb_B_off11(2),         // skip next instruction (+2 bytes)
+        Thumb_B_off11(0),         // PC is instruction address +4, so skips next
         Thumb_ADD_imm(0U, 0x7FU), // skipped
         Thumb_SUB_imm(0U, 0U),    // landing
     };
@@ -83,6 +83,6 @@ TEST(CPUThumb, MovAddSubAndBranch) {
     cpu.step(); // SUB 0
 
     EXPECT_EQ(cpu.debug_reg(0), 6U);
-    // After 5 steps PC advanced 5*2 and branch added +2 => base + 12
+    // The branch at base+6 targets base+10, and the landing instruction advances to base+12
     EXPECT_EQ(cpu.debug_pc(), kBase + 12U);
 }
