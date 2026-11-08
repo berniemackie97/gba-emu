@@ -1,0 +1,33 @@
+name: Hardware correctness finding
+description: Track a verified specification mismatch with a minimal reproduction
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Hardware contract
+      description: Cite instruction encoding, address range, register bits and exact expected effects.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current implementation and observed divergence
+      description: Point to source lines, test cases and the first incorrect machine state.
+    validations:
+      required: true
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Reproduction fixture
+      description: Minimal bytes or a small generated program with expected registers, memory, flags, cycles or pixels.
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: Regression and edge-case coverage
+      description: Include negative cases, boundary values and independent reference evidence.
+    validations:
+      required: true
