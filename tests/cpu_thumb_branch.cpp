@@ -5,6 +5,7 @@
 #include "core/bus/bus.h"
 #include "core/cpu/arm7tdmi.h"
 #include "core/mmu/mmu.h"
+#include "support/temp_asset.h"
 #include "support/thumb_program.h"
 
 using gba::ARM7TDMI;
@@ -122,4 +123,26 @@ TEST(ThumbBranch, GeneratedCartridgeExecutesBranchToTarget) {
     cpu.step();
     EXPECT_EQ(cpu.debug_reg(0), 42U);
     EXPECT_EQ(cpu.debug_pc(), MMU::WS0_BASE + 6U);
+}
+
+TEST(ThumbBranch, NegativeOffsetWrapsAddressSpaceAtZero) {
+    std::array<std::uint8_t, MMU::BIOS_SIZE> bios{};
+    bios[0] = 0xFCU;
+    bios[1] = 0xE7U; // B -8 from address 0, PC+4-8 wraps to 0xFFFFFFFC
+
+    const gba::test::TempAsset image("cpu-thumb-branch-wrap-bios.bin");
+    ASSERT_TRUE(image.write(bios));
+
+    Bus bus;
+    bus.reset();
+    ASSERT_TRUE(bus.load_bios(image.path()));
+
+    ARM7TDMI cpu;
+    cpu.attach(bus);
+    cpu.reset();
+    cpu.debug_set_program_counter(MMU::BIOS_BASE);
+    cpu.step();
+
+    EXPECT_EQ(cpu.debug_pc(), 0xFFFFFFFCU);
+    EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
 }
