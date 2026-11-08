@@ -8,7 +8,13 @@ namespace gba {
 
     void ARM7TDMI::reset() noexcept {
         regs_.fill(0U);
-        cpsr_ = kFlagT; // start in Thumb state
+        cpsr_ = kFlagT;
+        fault_ = {};
+    }
+
+    void ARM7TDMI::record_fault(FaultKind kind, u32 instructionAddress, u16 instruction) noexcept {
+        fault_ = {kind, instructionAddress, instruction, cpsr_};
+        regs_[kRegPC] = instructionAddress;
     }
 
     // -------------------------- flag helpers --------------------------
@@ -232,12 +238,8 @@ namespace gba {
 
     void ARM7TDMI::exec_b(u16 insn) noexcept {
         // imm11 in bits [10:0], target = sign_extend((imm11 << 1))
-        constexpr u16 kImm11Mask = 0x07FFU;
-        constexpr u32 kAlignShift = 1U;
-        const u32 imm11 = insn & kImm11Mask;
-        const u32 offset12 = imm11 << kAlignShift;
-        const u32 signedOff = sign_extend12(offset12);
-        regs_[kRegPC] += signedOff; // PC already advanced by fetch
+        const u32 offset12 = static_cast<u32>(insn & kImm11Mask) << 1U;
+        regs_[kRegPC] = thumb_pc() + sign_extend<12U>(offset12);
     }
 
     // -------------------------- Thumb Format 2: Add/Subtract --------------------------
@@ -421,11 +423,8 @@ namespace gba {
             cpsr_ |= kFlagT;
             regs_[kRegPC] = targetAddr & ~0x1U; // Clear bit 0, keep halfword aligned
         } else {
-            // Switch to ARM state (not yet implemented)
-            // For now, we'll just branch and clear T flag
             cpsr_ &= ~kFlagT;
-            regs_[kRegPC] = targetAddr & ~0x3U; // Word aligned for ARM
-            // TODO: ARM mode execution not yet implemented
+            regs_[kRegPC] = targetAddr & ~u32{3};
         }
     }
 
@@ -438,12 +437,10 @@ namespace gba {
         const u32 offsetBytes = imm8Words << 2U;
 
         // We fetched at PC_old; step() has advanced PC to PC_old + 2 here.
-        const u32 pcAfterFetch = regs_[kRegPC];
-        const u32 pcForLdr = (pcAfterFetch + 2U) & kWordMask; // (addr+4) aligned
+        const u32 pcForLdr = thumb_pc() & kWordMask;
 
         const u32 address = pcForLdr + offsetBytes;
         regs_.at(destReg) = read_u32_unaligned(address);
-        set_nz(regs_.at(destReg));
     }
 
     // 01101 LDR Rd, [Rb, #imm5*4]
@@ -454,7 +451,6 @@ namespace gba {
         const u32 address = regs_.at(baseReg) + (imm5Words << 2U);
 
         regs_.at(destReg) = read_u32_unaligned(address);
-        set_nz(regs_.at(destReg));
     }
 
     // 01100 STR Rd, [Rb, #imm5*4]
@@ -476,7 +472,6 @@ namespace gba {
         const u32 address = regs_.at(baseReg) + imm5;
 
         regs_.at(destReg) = static_cast<u32>(bus_->read8(address));
-        set_nz(regs_.at(destReg)); // C/V unaffected
     }
 
     // 01110 STRB Rd, [Rb, #imm5]
@@ -555,16 +550,7 @@ namespace gba {
             const u32 targetAddr = bus_->read32(addr);
             addr += 4U;
 
-            // Bit 0 determines Thumb/ARM state (should always be 1 for Thumb)
-            if ((targetAddr & 0x1U) != 0U) {
-                // Stay in Thumb - clear bit 0 for halfword alignment
-                regs_[kRegPC] = targetAddr & ~0x1U;
-                cpsr_ |= kFlagT;
-            } else {
-                // Switch to ARM mode (not yet implemented, but set PC anyway)
-                regs_[kRegPC] = targetAddr & ~0x3U; // word aligned
-                cpsr_ &= ~kFlagT;
-            }
+            regs_[kRegPC] = targetAddr & ~u32{1};
         }
 
         // Update SP
@@ -580,9 +566,7 @@ namespace gba {
         const u32 cond = (insn >> 8U) & 0xFU;    // bits 8-11: condition
         const u32 imm8 = insn & 0xFFU;           // bits 0-7: offset
 
-        // Sign-extend 8-bit to 32-bit, then shift left by 1 (halfword offset)
-        const auto signedOff8 = static_cast<std::int8_t>(imm8);
-        const auto signedOff = static_cast<std::int32_t>(signedOff8) << 1;
+        const u32 signedOffset = sign_extend<9U>(imm8 << 1U);
 
         // Evaluate condition based on CPSR flags
         bool conditionMet = false;
@@ -607,15 +591,13 @@ namespace gba {
             case 0xBU: conditionMet = (N != V);         break; // BLT: N != V (signed <)
             case 0xCU: conditionMet = !Z && (N == V);   break; // BGT: Z clear AND N == V (signed >)
             case 0xDU: conditionMet = Z || (N != V);    break; // BLE: Z set OR N != V (signed <=)
-            case 0xEU: conditionMet = true;             break; // BAL: always (undefined in Thumb)
-            case 0xFU: conditionMet = false;            break; // Reserved (SWI in some docs)
-            default: break;
+            default: return;
         }
 
         // Branch if condition met
         if (conditionMet) {
             // PC was already advanced by fetch, so offset is relative to current PC
-            regs_[kRegPC] = static_cast<u32>(static_cast<std::int32_t>(regs_[kRegPC]) + signedOff);
+            regs_[kRegPC] = thumb_pc() + signedOffset;
         }
         // flags unaffected
     }
@@ -623,128 +605,92 @@ namespace gba {
     // -------------------------- fetch/decode/dispatch --------------------------
 
     void ARM7TDMI::step() noexcept {
-        // Fetch Thumb16 at PC, then advance PC by 2
-        const u32 fetchAddr = regs_[kRegPC];
-        const u16 insn = bus_->read16(fetchAddr);
-        regs_[kRegPC] = fetchAddr + 2U;
-
-        // Decode by top 5 bits (mask 0b11111_00000000000) for most formats
-        const u16 top5 = static_cast<u16>(insn & 0xF800U);
-        // For Format 2, we need top 7 bits (0b0001_1xx_xxxxxxxxx)
-        const u16 top7 = static_cast<u16>(insn & 0xFE00U);
-        // For Format 5, we need top 8 bits (0b01000_1xx_xxxxxxxx)
-        const u16 top8 = static_cast<u16>(insn & 0xFF00U);
-        // For Format 4 ALU, we need top 10 bits (0b010000_xxxx_xxxxxx)
-        const u16 top10 = static_cast<u16>(insn & 0xFFC0U);
-        // For Format 14 (PUSH/POP), we need top 7 bits + bit 3 (0b1011_x10_xxxxxxxxx)
-        const u16 top7_pushpop = static_cast<u16>(insn & 0xF600U);
-        // For Format 16 (Bcond), we need top 4 bits (0b1101_xxxx_xxxxxxxx)
-        const u16 top4 = static_cast<u16>(insn & 0xF000U);
-
-        // Format 1: Shift by immediate (top 5 bits)
-        constexpr u16 kLslImm = 0x0000U;     // 00000
-        constexpr u16 kLsrImm = 0x0800U;     // 00001
-        constexpr u16 kAsrImm = 0x1000U;     // 00010
-
-        constexpr u16 kMovImm = 0x2000U;     // 00100
-        constexpr u16 kCmpImm = 0x2800U;     // 00101
-        constexpr u16 kAddImm = 0x3000U;     // 00110
-        constexpr u16 kSubImm = 0x3800U;     // 00111
-        constexpr u16 kLdrLiteral = 0x4800U; // 01001
-        constexpr u16 kStrImmW = 0x6000U;    // 01100
-        constexpr u16 kLdrImmW = 0x6800U;    // 01101
-        constexpr u16 kStrImmB = 0x7000U;    // 01110
-        constexpr u16 kLdrImmB = 0x7800U;    // 01111
-        constexpr u16 kBranch = 0xE000U;     // 11100
-
-        // Format 2: Add/subtract (7-bit decode)
-        constexpr u16 kAddReg = 0x1800U;    // 0001100
-        constexpr u16 kSubReg = 0x1A00U;    // 0001101
-        constexpr u16 kAddImm3 = 0x1C00U;   // 0001110
-        constexpr u16 kSubImm3 = 0x1E00U;   // 0001111
-
-        // Format 4: ALU operations (10-bit decode)
-        constexpr u16 kAnd = 0x4000U;       // 0100000000
-        constexpr u16 kEor = 0x4040U;       // 0100000001
-        constexpr u16 kOrr = 0x4300U;       // 0100001100
-        constexpr u16 kBic = 0x4380U;       // 0100001110
-        constexpr u16 kMvn = 0x43C0U;       // 0100001111
-
-        // Format 5: High register operations / BX (8-bit decode)
-        constexpr u16 kAddHigh = 0x4400U;   // 01000100
-        constexpr u16 kCmpHigh = 0x4500U;   // 01000101
-        constexpr u16 kMovHigh = 0x4600U;   // 01000110
-        constexpr u16 kBX = 0x4700U;        // 01000111
-
-        // Format 14: PUSH/POP (top 7 bits + bit 3)
-        constexpr u16 kPush = 0xB400U;      // 1011010
-        constexpr u16 kPop = 0xB600U;       // 1011110 (note: bit 3 is set for POP)
-
-        // Format 16: Conditional branch (top 4 bits)
-        constexpr u16 kBCond = 0xD000U;     // 1101
-
-        // Check most specific first: Format 10 (10-bit), then Format 8 (8-bit), then Format 7 (7-bit)
-        if (top10 == kAnd) {
-            exec_and(insn);
-        } else if (top10 == kEor) {
-            exec_eor(insn);
-        } else if (top10 == kOrr) {
-            exec_orr(insn);
-        } else if (top10 == kBic) {
-            exec_bic(insn);
-        } else if (top10 == kMvn) {
-            exec_mvn(insn);
-        } else if (top8 == kAddHigh) {
-            exec_add_high(insn);
-        } else if (top8 == kCmpHigh) {
-            exec_cmp_high(insn);
-        } else if (top8 == kMovHigh) {
-            exec_mov_high(insn);
-        } else if (top8 == kBX) {
-            exec_bx(insn);
-        } else if (top7_pushpop == kPush) {
-            exec_push(insn);
-        } else if (top7_pushpop == kPop) {
-            exec_pop(insn);
-        } else if (top7 == kAddReg) {
-            exec_add_reg(insn);
-        } else if (top7 == kSubReg) {
-            exec_sub_reg(insn);
-        } else if (top7 == kAddImm3) {
-            exec_add_imm3(insn);
-        } else if (top7 == kSubImm3) {
-            exec_sub_imm3(insn);
-        } else if (top5 == kMovImm) {
-            exec_mov_imm(insn);
-        } else if (top5 == kCmpImm) {
-            exec_cmp_imm(insn);
-        } else if (top5 == kAddImm) {
-            exec_add_imm(insn);
-        } else if (top5 == kSubImm) {
-            exec_sub_imm(insn);
-        } else if (top5 == kLdrLiteral) {
-            exec_ldr_literal(insn);
-        } else if (top5 == kStrImmW) {
-            exec_str_imm_w(insn);
-        } else if (top5 == kLdrImmW) {
-            exec_ldr_imm_w(insn);
-        } else if (top5 == kStrImmB) {
-            exec_str_imm_b(insn);
-        } else if (top5 == kLdrImmB) {
-            exec_ldr_imm_b(insn);
-        } else if (top4 == kBCond) {
-            exec_bcond(insn);
-        } else if (top5 == kBranch) {
-            exec_b(insn);
-        } else if (top5 == kLslImm) {
-            exec_lsl_imm(insn);
-        } else if (top5 == kLsrImm) {
-            exec_lsr_imm(insn);
-        } else if (top5 == kAsrImm) {
-            exec_asr_imm(insn);
-        } else {
-            // NOP for unimplemented in this milestone
+        if (fault_.kind != FaultKind::None) {
+            return;
         }
+
+        const u32 fetchAddr = regs_[kRegPC];
+        if (bus_ == nullptr) {
+            record_fault(FaultKind::MissingBus, fetchAddr, 0U);
+            return;
+        }
+        if ((cpsr_ & kFlagT) == 0U) {
+            record_fault(FaultKind::UnsupportedArmState, fetchAddr, 0U);
+            return;
+        }
+
+        const u16 instruction = bus_->read16(fetchAddr);
+        regs_[kRegPC] = fetchAddr + 2U;
+        execute_thumb(instruction, fetchAddr);
+    }
+
+    void ARM7TDMI::execute_thumb(u16 instruction, u32 instructionAddress) noexcept {
+        constexpr u16 kStackMask = 0xFE00U;
+        const u16 stackForm = instruction & kStackMask;
+        if (stackForm == 0xB400U || stackForm == 0xBC00U) {
+            if ((instruction & 0x1FFU) == 0U) {
+                record_fault(FaultKind::UndefinedThumb, instructionAddress, instruction);
+            } else if (stackForm == 0xB400U) {
+                exec_push(instruction);
+            } else {
+                exec_pop(instruction);
+            }
+            return;
+        }
+
+        if ((instruction & 0xF000U) == 0xD000U) {
+            const u32 condition = (instruction >> 8U) & 0xFU;
+            if (condition == 0xEU) {
+                record_fault(FaultKind::UndefinedThumb, instructionAddress, instruction);
+            } else if (condition == 0xFU) {
+                record_fault(FaultKind::UnsupportedThumb, instructionAddress, instruction);
+            } else {
+                exec_bcond(instruction);
+            }
+            return;
+        }
+
+        struct DecoderEntry {
+            u16 mask;
+            u16 pattern;
+            void (ARM7TDMI::*handler)(u16) noexcept;
+        };
+        static constexpr std::array<DecoderEntry, 26> kDecoder{{
+            {0xFFC0U, 0x4000U, &ARM7TDMI::exec_and},
+            {0xFFC0U, 0x4040U, &ARM7TDMI::exec_eor},
+            {0xFFC0U, 0x4300U, &ARM7TDMI::exec_orr},
+            {0xFFC0U, 0x4380U, &ARM7TDMI::exec_bic},
+            {0xFFC0U, 0x43C0U, &ARM7TDMI::exec_mvn},
+            {0xFF00U, 0x4400U, &ARM7TDMI::exec_add_high},
+            {0xFF00U, 0x4500U, &ARM7TDMI::exec_cmp_high},
+            {0xFF00U, 0x4600U, &ARM7TDMI::exec_mov_high},
+            {0xFF00U, 0x4700U, &ARM7TDMI::exec_bx},
+            {0xFE00U, 0x1800U, &ARM7TDMI::exec_add_reg},
+            {0xFE00U, 0x1A00U, &ARM7TDMI::exec_sub_reg},
+            {0xFE00U, 0x1C00U, &ARM7TDMI::exec_add_imm3},
+            {0xFE00U, 0x1E00U, &ARM7TDMI::exec_sub_imm3},
+            {0xF800U, 0x2000U, &ARM7TDMI::exec_mov_imm},
+            {0xF800U, 0x2800U, &ARM7TDMI::exec_cmp_imm},
+            {0xF800U, 0x3000U, &ARM7TDMI::exec_add_imm},
+            {0xF800U, 0x3800U, &ARM7TDMI::exec_sub_imm},
+            {0xF800U, 0x4800U, &ARM7TDMI::exec_ldr_literal},
+            {0xF800U, 0x6000U, &ARM7TDMI::exec_str_imm_w},
+            {0xF800U, 0x6800U, &ARM7TDMI::exec_ldr_imm_w},
+            {0xF800U, 0x7000U, &ARM7TDMI::exec_str_imm_b},
+            {0xF800U, 0x7800U, &ARM7TDMI::exec_ldr_imm_b},
+            {0xF800U, 0xE000U, &ARM7TDMI::exec_b},
+            {0xF800U, 0x0000U, &ARM7TDMI::exec_lsl_imm},
+            {0xF800U, 0x0800U, &ARM7TDMI::exec_lsr_imm},
+            {0xF800U, 0x1000U, &ARM7TDMI::exec_asr_imm}
+        }};
+
+        for (const auto &entry : kDecoder) {
+            if ((instruction & entry.mask) == entry.pattern) {
+                (this->*entry.handler)(instruction);
+                return;
+            }
+        }
+        record_fault(FaultKind::UnsupportedThumb, instructionAddress, instruction);
     }
 
 } // namespace gba

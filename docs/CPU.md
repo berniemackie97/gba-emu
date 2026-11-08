@@ -1,64 +1,61 @@
-# CPU – ARM7TDMI (Thumb subset)
+# ARM7TDMI CPU interpreter
 
-This document describes the currently implemented portion of the ARM7TDMI core
-used by the GBA emulator. The focus is **functional correctness first**, with a
-straightforward interpreter and tight unit tests.
+The CPU currently executes a subset of 16-bit Thumb instructions. ARM
+instructions, exceptions, timing and many Thumb formats remain unimplemented.
+The supported instruction set must not be interpreted as complete game
+compatibility.
 
----
+## PC and control flow
 
-## Registers & flags
+The stored R15 value is the address of the next instruction to fetch.
+During Thumb execution, fetching advances it by two bytes. PC-relative
+branches use the architectural operand value of the current instruction
+address plus four bytes; literal loads align that value down to four bytes.
 
-- 16 general registers `r0..r15` with `r15==PC`
-- `CPSR` flags used so far: `N` (31), `Z` (30), `C` (29), `V` (28); `T` (5) is
-  assumed set (Thumb state)
-- Program counter in Thumb is kept **halfword aligned** (bit0 cleared)
+The signed 8-bit and 11-bit branch displacements are encoded in halfwords.
+Both are sign-extended using unsigned modulo arithmetic, so negative
+displacements cannot invoke signed-shift or signed-overflow undefined
+behavior.
 
-## Implemented instructions (Thumb‑16)
+## Stack and status register
 
-- Data‑processing (immediate): `MOV (imm8)`, `ADD (imm8)`, `SUB (imm8)`
-- Branch: `B (imm11)` (PC‑relative)
-- Loads/stores:
-  - `LDR (literal)` — base = `(PC_old + 4)` aligned to 4, then `+ imm8*4`
-  - `LDR (word, imm5)`, `STR (word, imm5)` — `[Rb + imm5*4]`
+Thumb PUSH uses a descending full stack; the lowest selected register is
+stored at the lowest address. POP loads registers in ascending order and
+advances SP. Optional LR is stored last, and optional PC is loaded last.
 
-## Flags
+ARM7TDMI implements ARMv4T semantics: loading PC using Thumb POP does
+not change the T state bit. Only BX and exception transitions can switch
+execution state. PUSH/POP and ordinary Thumb LDR/STR/LDRB/STRB variants
+must preserve all CPSR condition flags. Arithmetic and compare operations
+update their specified condition flags.
 
-- `set_nz(result)` clears/sets `N` and `Z`
-- `set_add_cv(a,b,r)` sets `C` on unsigned overflow; `V` when signs of `a` and
-  `b` are equal and sign of `r` differs
-- `set_sub_cv(a,b,r)` sets `C` as **not‑borrow** (`a >= b`); `V` when signs of
-  `a` and `b` differ and sign of `r` differs from `a`
+## Execution failures
 
-## Unaligned word semantics (architectural)
+The interpreter does not silently treat unimplemented opcodes as NOPs.
+`ARM7TDMI::execution_fault()` reports a sticky failure kind together with
+the faulting fetch address, 16-bit opcode (when fetched) and CPSR.
 
-ARM7TDMI allows unaligned word LDR/STR. The architecture specifies that loads
-read the **aligned** word then rotate right by `8 * (addr & 3)`; stores perform
-the inverse (rotate left by the same amount, then write aligned).
+- UnsupportedThumb: known unsupported instruction forms, including SWI.
+- UndefinedThumb: invalid conditional-branch encodings and empty register lists.
+- UnsupportedArmState: BX entered ARM state; the next step is refused until
+  ARM instruction decoding is implemented.
+- MissingBus: a step was requested before attaching a bus.
 
-In this emulator:
-- The **CPU** implements that rotate behavior:
-  ```c++
-  struct RotRight { explicit constexpr RotRight(std::uint8_t n) : n(n) {} std::uint8_t n; };
-  static constexpr auto rotr(u32 value, RotRight amt) noexcept -> u32;
-  // read_u32_unaligned(addr) = rotr(mmio.read32(addr & ~3), RotRight{8*(addr&3)})
-  ```
-- The **Bus/MMU** do not rotate; they provide raw little‑endian access.
+The fault is cleared on CPU reset, and stepping again without reset does
+not advance execution. A supported high-register `MOV r8,r8` is a valid,
+non-flag-changing no-op.
 
-## PC used by `LDR (literal)`
+## Verification
 
-When executing `LDR Rd, [PC, #imm8*4]` in Thumb state, the base is the address
-of the **current** instruction plus 4 **then** aligned to 4. The test
-`CPUThumbLoadStore.LdrLiteralThenStoreAndLoadWord` encodes the literal pool
-immediately after the four‑instruction sequence and verifies the behavior.
+`tests/cpu_thumb_branch.cpp` covers signed branch boundaries, taken and
+not-taken conditions, and a generated cartridge instruction sequence.
+`tests/cpu_thumb_stack.cpp` covers stack ordering, SP changes, LR push,
+PC pop and a generated cartridge return path.
+`tests/cpu_thumb_load_flags.cpp` covers full CPSR preservation across
+loads/stores and conditional branches that follow loads.
+`tests/cpu_thumb_faults.cpp` verifies diagnostic context, undefined
+encodings, sticky failures and ARM/Thumb BX transitions.
 
-## Tests
-
-- `CPUThumb.MovAddSubAndBranch` — arithmetic and control flow sanity checks
-- `CPUThumbLoadStore.LdrLiteralThenStoreAndLoadWord` — literal pool + store/load
-  and unaligned rotation path through the CPU helpers
-
-## Future work
-
-- Logical ops and shifts; comparisons; more load/store forms (byte/half, sign‑extend)
-- High‑register ops, `BX`, and entry into ARM state
-- Optional timing/pipeline model (separate from functional core)
+The R1 roadmap tracks remaining Thumb and ARM instruction coverage and
+independent conformance vectors. All tests run through CTest and the
+cross-platform quality gate.

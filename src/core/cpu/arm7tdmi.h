@@ -36,6 +36,21 @@ namespace gba {
         static constexpr u32 kFlagV = 1U << 28;
         static constexpr u32 kFlagT = 1U << 5;
 
+        enum class FaultKind : std::uint8_t {
+            None,
+            MissingBus,
+            UnsupportedThumb,
+            UndefinedThumb,
+            UnsupportedArmState
+        };
+
+        struct ExecutionFault {
+            FaultKind kind = FaultKind::None;
+            u32 pc = 0;
+            u32 opcode = 0;
+            u32 cpsr = 0;
+        };
+
         ARM7TDMI() = default;
 
         void attach(Bus &bus) noexcept { bus_ = &bus; }
@@ -53,21 +68,26 @@ namespace gba {
             return regs_.at(static_cast<std::size_t>(index & static_cast<int>(kRegIndexMask)));
         }
         [[nodiscard]] auto debug_cpsr() const noexcept -> u32 { return cpsr_; }
+        [[nodiscard]] auto execution_fault() const noexcept -> const ExecutionFault & { return fault_; }
 
       private:
         std::array<u32, kNumRegs> regs_{}; // r0..r15 (r15==PC)
         u32 cpsr_ = kFlagT;
         Bus *bus_ = nullptr; // not owned
+        ExecutionFault fault_{};
 
         // ----- Helpers -----
-        // For B(imm11): after shift-left 1, we have a 12-bit signed offset.
-        static constexpr auto sign_extend12(u32 value) noexcept -> u32 {
-            constexpr u32 kWidth = 12U;
-            const u32 mask = (1U << kWidth) - 1U;
-            const u32 signMask = 1U << (kWidth - 1U);
-            const u32 masked = value & mask;
-            return (masked ^ signMask) - signMask; // classic 2's-complement sign extend
+        template <u32 Width>
+        static constexpr auto sign_extend(u32 value) noexcept -> u32 {
+            static_assert(Width > 1U && Width < kWordBits);
+            const u32 mask = (u32{1} << Width) - 1U;
+            const u32 signMask = u32{1} << (Width - 1U);
+            return ((value & mask) ^ signMask) - signMask;
         }
+
+        [[nodiscard]] auto thumb_pc() const noexcept -> u32 { return regs_[kRegPC] + 2U; }
+        void record_fault(FaultKind kind, u32 instructionAddress, u16 instruction) noexcept;
+        void execute_thumb(u16 instruction, u32 instructionAddress) noexcept;
 
         void set_nz(u32 result) noexcept;
         void set_add_cv(u32 augend, u32 addend, u32 result) noexcept;
