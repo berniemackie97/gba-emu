@@ -29,6 +29,7 @@ namespace gba {
         std::ranges::fill(vram_, u8{0x00});
         std::ranges::fill(oam_, u8{0x00});
         gamepak_.clear();
+        cartridge_header_.reset();
     }
 
     // ------------------------------ LOADERS -------------------------------------------
@@ -59,7 +60,13 @@ namespace gba {
             return finish_load(error, loaded.error);
         }
 
+        const auto header = parse_cartridge_header(loaded.bytes);
+        if (!header.has_value()) {
+            return finish_load(error, ImageLoadError::InvalidHeader);
+        }
+
         gamepak_.swap(loaded.bytes);
+        cartridge_header_ = header;
         return finish_load(error, ImageLoadError::None);
     }
 
@@ -74,6 +81,7 @@ namespace gba {
         try {
             std::vector<u8> staged(bytes.begin(), bytes.end());
             gamepak_.swap(staged);
+            cartridge_header_.reset();
         } catch (const std::bad_alloc &) {
             return finish_load(error, ImageLoadError::OutOfMemory);
         } catch (const std::length_error &) {
@@ -84,19 +92,6 @@ namespace gba {
     }
 
     // ------------------------------ ADDRESS HELPERS -------------------------------------------
-
-    auto MMU::gamepak_index(u32 addr) const noexcept -> std::size_t {
-        if (gamepak_.empty()) {
-            return 0; // caller will return open bus if empty
-        }
-        const u32 regionBase = ws_base_of(addr);
-        const u32 regionOffest = addr - regionBase; // 0..(32 MiB - 1)
-
-        // mirror by rom size inside the 32 MiB window
-        const std::size_t romSize = gamepak_.size();
-        const std::size_t index = static_cast<std::size_t>(regionOffest) % romSize;
-        return index;
-    }
 
     // ------------------------------ READS/WRITES -------------------------------------------
 
@@ -137,10 +132,8 @@ namespace gba {
 
         // gamepak ROM (three 32 MiB windows)
         if (in_any_ws(addr)) {
-            if (gamepak_.empty()) {
-                return kOpenBus;
-            }
-            return gamepak_[gamepak_index(addr)];
+            const auto offset = static_cast<std::size_t>(addr - ws_base_of(addr));
+            return offset < gamepak_.size() ? gamepak_[offset] : kOpenBus;
         }
 
         return kOpenBus; // unmapped for now

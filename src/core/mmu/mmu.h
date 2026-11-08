@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <span>
 #include <vector>
+#include "core/content/cartridge_header.h"
 #include "core/content/file_image.h"
 #include "core/io/io.h"
 
@@ -42,7 +43,7 @@ namespace gba {
         static constexpr u32 WS1_BASE = 0x0A000000U;
         static constexpr u32 WS2_BASE = 0x0C000000U;
         static constexpr u32 WS_REGION_SIZE_32MiB = 0x02000000U; // 32 MiB per region
-        static constexpr std::size_t GAMEPAK_HEADER_SIZE = 0xC0U;
+        static constexpr std::size_t GAMEPAK_HEADER_SIZE = CartridgeHeader::kSize;
 
         // --- Window constants used for aliasing behaviour (names beat hex) ---
         static constexpr u32 kWindow16MiB = 0x01000000U;                     // internal RAM/video region windows
@@ -59,6 +60,9 @@ namespace gba {
         // GamePak: file based and in memory loading
         [[nodiscard]] auto load_gamepak(const std::filesystem::path &file, ImageLoadError *error = nullptr) noexcept -> bool;
         [[nodiscard]] auto load_gamepak(std::span<const u8> bytes, ImageLoadError *error = nullptr) noexcept -> bool;
+        [[nodiscard]] auto cartridge_header() const noexcept -> const std::optional<CartridgeHeader> & {
+            return cartridge_header_;
+        }
 
         // byte access (we’ll add timings and alignment rules later per width)
         [[nodiscard]] auto read8(u32 addr) const noexcept -> u8;
@@ -116,9 +120,6 @@ namespace gba {
             return static_cast<std::size_t>((addr - OAM_BASE) & (static_cast<u32>(OAM_SIZE) - 1U));
         }
 
-        // GamePak helpers
-        [[nodiscard]] auto gamepak_index(u32 addr) const noexcept -> std::size_t;
-
         // backing stores (simple arrays for now)
         std::array<u8, BIOS_SIZE> bios_{};
         std::array<u8, EWRAM_SIZE> ewram_{};
@@ -128,8 +129,9 @@ namespace gba {
         std::array<u8, VRAM_SIZE> vram_{};
         std::array<u8, OAM_SIZE> oam_{};
 
-        // GamePak ROM (dynamic size mirrors by size inside each 32 MiB window)
+        // Game Pak ROM shares the same offset in each wait-state window.
         std::vector<u8> gamepak_;
+        std::optional<CartridgeHeader> cartridge_header_;
 
         bool bios_loaded_ = false;
     };

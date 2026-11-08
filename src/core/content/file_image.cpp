@@ -23,6 +23,8 @@ auto image_load_error_message(ImageLoadError error) noexcept -> std::string_view
         return "Asset exceeds its supported size limit";
     case ImageLoadError::IncompleteRead:
         return "Asset changed or could not be read completely";
+    case ImageLoadError::InvalidHeader:
+        return "Cartridge header fixed byte or complement check is invalid";
     case ImageLoadError::OutOfMemory:
         return "Insufficient memory to load asset";
     }

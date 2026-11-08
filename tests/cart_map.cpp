@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/mmu/mmu.h"
+#include "support/cartridge_fixture.h"
 #include "support/temp_asset.h"
 
 using gba::MMU;
@@ -14,34 +15,31 @@ using u8 = std::uint8_t;
 using u32 = std::uint32_t;
 
 namespace {
-    constexpr std::array<u8, 4> kTinyRom{0xDEU, 0xADU, 0xBEU, 0xEFU};
+    constexpr std::array<u8, 4> kTinyProgram{0xDEU, 0xADU, 0xBEU, 0xEFU};
 }
 
-TEST(GamePak, MirrorsAcrossWaitStatesAndBySize) {
+TEST(GamePak, WaitStateWindowsShareDirectOffsetsWithoutLengthModulo) {
     MMU mmu;
     mmu.reset();
-    ASSERT_TRUE(mmu.load_gamepak(kTinyRom));
+    ASSERT_TRUE(mmu.load_gamepak(kTinyProgram));
 
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyRom[0]);
-    EXPECT_EQ(mmu.read8(MMU::WS1_BASE + 1U), kTinyRom[1]);
-    EXPECT_EQ(mmu.read8(MMU::WS2_BASE + 2U), kTinyRom[2]);
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE + 4U), kTinyRom[0]);
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE + 5U), kTinyRom[1]);
-}
+    for (const u32 base : {MMU::WS0_BASE, MMU::WS1_BASE, MMU::WS2_BASE}) {
+        EXPECT_EQ(mmu.read8(base), kTinyProgram.front());
+        EXPECT_EQ(mmu.read8(base + 2U), kTinyProgram[2]);
+        EXPECT_EQ(mmu.read8(base + 3U), kTinyProgram.back());
+        EXPECT_EQ(mmu.read8(base + 4U), MMU::kOpenBus);
+        EXPECT_EQ(mmu.read8(base + 6U), MMU::kOpenBus);
+        EXPECT_EQ(mmu.read8(base + MMU::WS_REGION_SIZE_32MiB - 1U), MMU::kOpenBus);
+    }
 
-TEST(GamePak, WritesAreIgnored) {
-    MMU mmu;
-    mmu.reset();
-    ASSERT_TRUE(mmu.load_gamepak(kTinyRom));
-
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyRom[0]);
     mmu.write8(MMU::WS0_BASE, 0U);
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyRom[0]);
+    mmu.write16(MMU::WS1_BASE + 2U, 0U);
+    mmu.write32(MMU::WS2_BASE, 0U);
+    EXPECT_EQ(mmu.read32(MMU::WS0_BASE), 0xEFBEADDEU);
 }
 
-TEST(GamePak, LoadsHeaderSizedFileAndRejectsTruncatedReplacement) {
-    std::array<u8, MMU::GAMEPAK_HEADER_SIZE> image{};
-    image.front() = 0x61U;
+TEST(GamePak, HeaderSizedFileLoadsAndTruncatedReplacementIsRejected) {
+    auto image = gba::test::kSyntheticCartridgeHeader;
     image.back() = 0xB2U;
     const gba::test::TempAsset valid("gamepak-file-valid.bin");
     ASSERT_TRUE(valid.write(image));
@@ -51,6 +49,8 @@ TEST(GamePak, LoadsHeaderSizedFileAndRejectsTruncatedReplacement) {
     gba::ImageLoadError error = gba::ImageLoadError::TooSmall;
     ASSERT_TRUE(mmu.load_gamepak(valid.path(), &error));
     EXPECT_EQ(error, gba::ImageLoadError::None);
+    ASSERT_TRUE(mmu.cartridge_header().has_value());
+    EXPECT_EQ(mmu.cartridge_header()->software_version, 2U);
     EXPECT_EQ(mmu.read8(MMU::WS0_BASE), image.front());
     EXPECT_EQ(mmu.read8(MMU::WS1_BASE + static_cast<u32>(image.size() - 1U)), image.back());
 
@@ -62,6 +62,7 @@ TEST(GamePak, LoadsHeaderSizedFileAndRejectsTruncatedReplacement) {
 
     EXPECT_EQ(mmu.read8(MMU::WS0_BASE), image.front());
     EXPECT_EQ(mmu.read8(MMU::WS2_BASE + static_cast<u32>(image.size() - 1U)), image.back());
+    ASSERT_TRUE(mmu.cartridge_header().has_value());
     ASSERT_TRUE(mmu.load_gamepak(valid.path(), &error));
     EXPECT_EQ(error, gba::ImageLoadError::None);
 }
@@ -69,7 +70,7 @@ TEST(GamePak, LoadsHeaderSizedFileAndRejectsTruncatedReplacement) {
 TEST(GamePak, RejectsEmptyOversizedAndNonRegularFiles) {
     MMU mmu;
     mmu.reset();
-    ASSERT_TRUE(mmu.load_gamepak(kTinyRom));
+    ASSERT_TRUE(mmu.load_gamepak(kTinyProgram));
 
     const gba::test::TempAsset empty("gamepak-file-empty.bin");
     ASSERT_TRUE(empty.write(std::span<const u8>{}));
@@ -79,7 +80,7 @@ TEST(GamePak, RejectsEmptyOversizedAndNonRegularFiles) {
     EXPECT_EQ(error, gba::ImageLoadError::TooSmall);
 
     const gba::test::TempAsset oversized("gamepak-file-oversized.bin");
-    ASSERT_TRUE(oversized.write(kTinyRom));
+    ASSERT_TRUE(oversized.write(kTinyProgram));
     std::error_code resizeError;
     std::filesystem::resize_file(oversized.path(), static_cast<std::uintmax_t>(MMU::WS_REGION_SIZE_32MiB) + 1U, resizeError);
     ASSERT_FALSE(resizeError);
@@ -93,13 +94,13 @@ TEST(GamePak, RejectsEmptyOversizedAndNonRegularFiles) {
     EXPECT_FALSE(mmu.load_gamepak(std::filesystem::current_path(), &error));
     EXPECT_EQ(error, gba::ImageLoadError::NotRegularFile);
 
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyRom[0]);
+    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyProgram.front());
 }
 
-TEST(GamePak, MemoryImagesHaveTheSameUpperBoundAndPreserveEarlierContents) {
+TEST(GamePak, MemoryImagesRemainBoundedAndRecoverAfterInvalidInput) {
     MMU mmu;
     mmu.reset();
-    ASSERT_TRUE(mmu.load_gamepak(kTinyRom));
+    ASSERT_TRUE(mmu.load_gamepak(kTinyProgram));
 
     gba::ImageLoadError error = gba::ImageLoadError::None;
     EXPECT_FALSE(mmu.load_gamepak(std::span<const u8>{}, &error));
@@ -108,20 +109,41 @@ TEST(GamePak, MemoryImagesHaveTheSameUpperBoundAndPreserveEarlierContents) {
     const std::vector<u8> oversized(static_cast<std::size_t>(MMU::WS_REGION_SIZE_32MiB) + 1U, 0xA5U);
     EXPECT_FALSE(mmu.load_gamepak(std::span<const u8>(oversized), &error));
     EXPECT_EQ(error, gba::ImageLoadError::TooLarge);
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyRom[0]);
+    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyProgram.front());
 
     constexpr std::array<u8, 2> replacement{0x12U, 0x34U};
     ASSERT_TRUE(mmu.load_gamepak(replacement, &error));
     EXPECT_EQ(error, gba::ImageLoadError::None);
+    EXPECT_FALSE(mmu.cartridge_header().has_value());
     EXPECT_EQ(mmu.read8(MMU::WS0_BASE), replacement[0]);
     EXPECT_EQ(mmu.read8(MMU::WS0_BASE + 1U), replacement[1]);
+    EXPECT_EQ(mmu.read8(MMU::WS0_BASE + 2U), MMU::kOpenBus);
 }
 
-TEST(GamePak, AcceptsMaximumWindowSizedFile) {
+TEST(GamePak, NonPowerOfTwoFilePreservesBytesWithoutModuloAliases) {
+    std::vector<u8> image(gba::test::kSyntheticCartridgeHeader.begin(),
+                          gba::test::kSyntheticCartridgeHeader.end());
+    image.resize(257U, 0x37U);
+    image.back() = 0xE3U;
+
+    const gba::test::TempAsset fixture("gamepak-file-nonpower.bin");
+    ASSERT_TRUE(fixture.write(image));
+
+    MMU mmu;
+    mmu.reset();
+    ASSERT_TRUE(mmu.load_gamepak(fixture.path()));
+
+    for (const u32 base : {MMU::WS0_BASE, MMU::WS1_BASE, MMU::WS2_BASE}) {
+        EXPECT_EQ(mmu.read8(base + 256U), 0xE3U);
+        EXPECT_EQ(mmu.read8(base + 257U), MMU::kOpenBus);
+        EXPECT_EQ(mmu.read8(base + 514U), MMU::kOpenBus);
+        EXPECT_EQ(mmu.read8(base + MMU::WS_REGION_SIZE_32MiB - 1U), MMU::kOpenBus);
+    }
+}
+
+TEST(GamePak, MaximumWindowSizedFileIncludesLastByte) {
     const gba::test::TempAsset file("gamepak-file-window-limit.bin");
-    std::array<u8, MMU::GAMEPAK_HEADER_SIZE> header{};
-    header.front() = 0x93U;
-    ASSERT_TRUE(file.write(header));
+    ASSERT_TRUE(file.write(gba::test::kSyntheticCartridgeHeader));
 
     std::error_code resizeError;
     std::filesystem::resize_file(file.path(), MMU::WS_REGION_SIZE_32MiB, resizeError);
@@ -141,6 +163,27 @@ TEST(GamePak, AcceptsMaximumWindowSizedFile) {
     gba::ImageLoadError error = gba::ImageLoadError::TooLarge;
     ASSERT_TRUE(mmu.load_gamepak(file.path(), &error));
     EXPECT_EQ(error, gba::ImageLoadError::None);
-    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), header.front());
+    ASSERT_TRUE(mmu.cartridge_header().has_value());
+    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), gba::test::kSyntheticCartridgeHeader.front());
     EXPECT_EQ(mmu.read8(MMU::WS2_BASE + MMU::WS_REGION_SIZE_32MiB - 1U), kLastByte);
+}
+
+TEST(GamePak, LoadedMetadataIsClearedOnResetAndRawImageReplacement) {
+    const gba::test::TempAsset file("gamepak-file-metadata-lifecycle.bin");
+    ASSERT_TRUE(file.write(gba::test::kSyntheticCartridgeHeader));
+
+    MMU mmu;
+    mmu.reset();
+    ASSERT_TRUE(mmu.load_gamepak(file.path()));
+    ASSERT_TRUE(mmu.cartridge_header().has_value());
+
+    ASSERT_TRUE(mmu.load_gamepak(kTinyProgram));
+    EXPECT_FALSE(mmu.cartridge_header().has_value());
+    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), kTinyProgram.front());
+
+    ASSERT_TRUE(mmu.load_gamepak(file.path()));
+    ASSERT_TRUE(mmu.cartridge_header().has_value());
+    mmu.reset();
+    EXPECT_FALSE(mmu.cartridge_header().has_value());
+    EXPECT_EQ(mmu.read8(MMU::WS0_BASE), MMU::kOpenBus);
 }
