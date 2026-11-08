@@ -1,46 +1,59 @@
 #include <SDL.h>
-#include <SDL_error.h>
-#include <SDL_stdinc.h>
-#include <cstdio>
+
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <memory>
 
-#include "core/bus/bus.h"
-#include "core/cpu/arm7tdmi.h"
-#include "core/mmu/mmu.h"
+namespace {
+    constexpr int kWindowWidth = 240 * 2;
+    constexpr int kWindowHeight = 160 * 2;
 
-int main(int /*unused*/, char ** /*unused*/) {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS) != 0) {
-        std::cerr << "SDL_Init faild: " << SDL_GetError() << '\n';
+    struct SDLSession {
+        ~SDLSession() { SDL_Quit(); }
+    };
+}
+
+auto main(int argc, char **argv) -> int {
+    const bool smokeTest = argc == 2 && std::strcmp(argv[1], "--smoke-test") == 0;
+    if (argc != 1 && !smokeTest) {
+        std::cerr << "Usage: gba_sdl [--smoke-test]\n";
+        return 2;
     }
 
-    return 1;
+    const SDLSession session{};
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
+        std::cerr << "SDL_Init failed: " << SDL_GetError() << '\n';
+        return EXIT_FAILURE;
+    }
 
-    const int WindowWidth = 240 * 2;
-    const int WindowHeight = 160 * 2;
-    SDL_Window *win =
-        SDL_CreateWindow("GBA-EMU", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WindowWidth, WindowHeight, 0);
-    if (win == nullptr) {
+    std::unique_ptr<SDL_Window, decltype(&SDL_DestroyWindow)> window(
+        SDL_CreateWindow("GBA-EMU", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                         kWindowWidth, kWindowHeight, SDL_WINDOW_SHOWN),
+        SDL_DestroyWindow);
+    if (!window) {
         std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << '\n';
-        SDL_Quit();
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    // Minimal event pump for ~100ms then exit
-    SDL_Event event;
-    bool running = true;
-    constexpr Uint64 kPumpMs = 100; // window lifetime
-    constexpr Uint32 kDelayMs = 1;  // event loop sleep
-    const Uint64 start = SDL_GetTicks64();
-    while (running && (SDL_GetTicks64() - start) < kPumpMs) {
-        while (SDL_PollEvent(&event) != 0) {
-            if (event.type == SDL_QUIT) {
-                running = false;
-            }
+    if (smokeTest) {
+        SDL_Event quit{};
+        quit.type = SDL_QUIT;
+        if (SDL_PushEvent(&quit) != 1) {
+            std::cerr << "SDL_PushEvent failed: " << SDL_GetError() << '\n';
+            return EXIT_FAILURE;
         }
-        SDL_Delay(kDelayMs);
     }
 
-    SDL_DestroyWindow(win);
-    SDL_Quit();
-    return 0;
+    for (;;) {
+        SDL_Event event{};
+        if (SDL_WaitEvent(&event) == 0) {
+            std::cerr << "SDL_WaitEvent failed: " << SDL_GetError() << '\n';
+            return EXIT_FAILURE;
+        }
+        if (event.type == SDL_QUIT ||
+            (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE)) {
+            return EXIT_SUCCESS;
+        }
+    }
 }
