@@ -85,6 +85,7 @@ namespace gba {
 
         [[nodiscard]] auto thumb_pc() const noexcept -> u32 { return regs_[kRegPC] + 2U; }
         void record_fault(FaultKind kind, u32 instructionAddress, u16 instruction) noexcept;
+        void execute_thumb(u16 instruction, u32 instructionAddress) noexcept;
 
         void set_nz(u32 result) noexcept;
         void set_add_cv(u32 augend, u32 addend, u32 result) noexcept;
