@@ -15,6 +15,7 @@ enum class ImageLoadError : std::uint8_t {
     TooSmall,
     TooLarge,
     IncompleteRead,
+    InvalidHeader,
     OutOfMemory
 };
 
