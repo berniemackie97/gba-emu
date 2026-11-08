@@ -29,8 +29,7 @@ auto image_load_error_message(ImageLoadError error) noexcept -> std::string_view
     return "Unknown asset load error";
 }
 
-auto read_file_image(const std::filesystem::path &path, std::uintmax_t minimum_size,
-                     std::uintmax_t maximum_size) noexcept -> FileImageLoad {
+auto read_file_image(const std::filesystem::path &path, FileImageLimits limits) noexcept -> FileImageLoad {
     std::error_code ec;
     const auto status = std::filesystem::status(path, ec);
     if (ec || status.type() == std::filesystem::file_type::not_found) {
@@ -44,10 +43,10 @@ auto read_file_image(const std::filesystem::path &path, std::uintmax_t minimum_s
     if (ec) {
         return {ImageLoadError::Unavailable, {}};
     }
-    if (size < minimum_size) {
+    if (size < limits.minimum) {
         return {ImageLoadError::TooSmall, {}};
     }
-    if (size > maximum_size || size > std::numeric_limits<std::size_t>::max()) {
+    if (size > limits.maximum || size > std::numeric_limits<std::size_t>::max()) {
         return {ImageLoadError::TooLarge, {}};
     }
 
