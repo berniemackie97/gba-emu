@@ -161,3 +161,33 @@ TEST(ThumbAddressMemory, GeneratedProgramUsesPcAndSpAddressingAcrossSeveralInstr
     EXPECT_EQ(cpu.debug_reg(ARM7TDMI::kRegSP), stack);
     EXPECT_EQ(cpu.debug_cpsr(), ARM7TDMI::kFlagT);
 }
+
+TEST(ThumbAddressMemory, ExistingWordStoreFormsAlignWithoutRotatingSource) {
+    constexpr std::uint32_t code = MMU::IWRAM_BASE;
+    constexpr std::uint32_t data = MMU::IWRAM_BASE + 0x1800U;
+    constexpr std::array<std::uint16_t, 2> opcodes{
+        0x6008U, // STR r0,[r1,#0]
+        0x9000U  // STR r0,[SP,#0]
+    };
+    Bus bus;
+    bus.reset();
+    ARM7TDMI cpu;
+    cpu.attach(bus);
+
+    for (const auto opcode : opcodes) {
+        for (std::uint32_t offset = 0U; offset < 4U; ++offset) {
+            bus.write32(data, 0xFFFFFFFFU);
+            bus.write16(code, opcode);
+            cpu.reset();
+            cpu.debug_set_program_counter(code);
+            cpu.debug_set_reg(0, 0x1234ABCDU);
+            cpu.debug_set_reg(1, data + offset);
+            cpu.debug_set_reg(ARM7TDMI::kRegSP, data + offset);
+            cpu.step();
+
+            EXPECT_EQ(bus.read32(data), 0x1234ABCDU) << opcode << ":" << offset;
+            EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
+            EXPECT_EQ(cpu.debug_cpsr(), ARM7TDMI::kFlagT);
+        }
+    }
+}
