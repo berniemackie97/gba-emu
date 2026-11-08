@@ -22,7 +22,7 @@ TEST(CoreSmoke, ResetLoadExecuteAndShutdown) {
 
     gba::Bus bus;
     bus.reset();
-    bus.load_gamepak(program);
+    ASSERT_TRUE(bus.load_gamepak(program));
 
     gba::ARM7TDMI cpu;
     cpu.attach(bus);
