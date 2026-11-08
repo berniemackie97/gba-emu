@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(gba_core
+    src/core/content/cartridge_header.cpp
     src/core/content/file_image.cpp
     src/core/bus/bus.cpp
     src/core/cpu/arm7tdmi.cpp
