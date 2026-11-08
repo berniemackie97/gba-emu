@@ -47,8 +47,11 @@ It does not yet execute a GBA game or present emulated frames.
 ctest --preset default -L frontend --output-on-failure
 ```
 
-On Windows, use `ctest --preset windows --build-config Debug -L frontend
---output-on-failure`.
+On Windows:
+
+```powershell
+ctest --preset windows --build-config Debug -L frontend --output-on-failure
+```
 
 CTest runs the executable using SDL's dummy video driver and an explicit
 `--smoke-test` shutdown event, then verifies initialization failure and
