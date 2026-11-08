@@ -31,13 +31,13 @@ class InterruptRegisters {
 
     void write8(std::uint32_t offset, std::uint8_t value) noexcept {
         if (offset < kFlags) {
-            enabled_ = write_register_byte(enabled_, offset, value, kInterruptMask);
+            enabled_ = write_register_byte(enabled_, {.lane = offset, .value = value, .writable_mask = kInterruptMask});
         } else if (offset < kFlags + 2U) {
             const auto acknowledge = static_cast<std::uint16_t>(
                 (static_cast<std::uint16_t>(value) << ((offset & 1U) * 8U)) & kInterruptMask);
             flags_ = static_cast<std::uint16_t>(flags_ & ~acknowledge);
         } else {
-            master_ = write_register_byte(master_, offset, value, 0x0001U);
+            master_ = write_register_byte(master_, {.lane = offset, .value = value, .writable_mask = 0x0001U});
         }
     }
 
