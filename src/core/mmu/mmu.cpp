@@ -40,7 +40,7 @@ namespace gba {
     }
 
     auto MMU::load_bios(const std::filesystem::path &file, ImageLoadError *error) noexcept -> bool {
-        const auto loaded = read_file_image(file, BIOS_SIZE, BIOS_SIZE);
+        const auto loaded = read_file_image(file, FileImageLimits{BIOS_SIZE, BIOS_SIZE});
         if (loaded.error != ImageLoadError::None) {
             return finish_load(error, loaded.error);
         }
@@ -51,7 +51,7 @@ namespace gba {
     }
 
     auto MMU::load_gamepak(const std::filesystem::path &file, ImageLoadError *error) noexcept -> bool {
-        auto loaded = read_file_image(file, GAMEPAK_HEADER_SIZE, WS_REGION_SIZE_32MiB);
+        auto loaded = read_file_image(file, FileImageLimits{GAMEPAK_HEADER_SIZE, WS_REGION_SIZE_32MiB});
         if (loaded.error != ImageLoadError::None) {
             return finish_load(error, loaded.error);
         }
