@@ -1,0 +1,38 @@
+name: Feature proposal
+description: Define a testable capability or hardware behavior
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: The observable behavior needed, not an implementation shopping list.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and boundaries
+      description: Included behavior, deliberate exclusions and relevant subsystem ownership.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Specification or source evidence
+      description: Link references and existing code paths that define the requirement.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and risks
+      description: Existing issues, design constraints, performance and compatibility risks.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance tests
+      description: Test cases, edge conditions and independent expected outputs that prove completion.
+    validations:
+      required: true
