@@ -1,9 +1,9 @@
 # ARM7TDMI CPU interpreter
 
-The CPU currently executes a subset of 16-bit Thumb instructions. ARM
-instructions, exceptions, timing and many Thumb formats remain unimplemented.
-The supported instruction set must not be interpreted as complete game
-compatibility.
+The CPU interprets Thumb instructions and selected ARMv4T 32-bit instructions.
+System exceptions, banked processor modes, certain ARM instruction families,
+and instruction-cycle timing are not yet implemented. Instruction execution
+coverage does not imply game compatibility.
 
 ## PC and control flow
 
@@ -76,16 +76,50 @@ in issue #20. Full opcode inventory and independent reference vectors are
 tracked in issue #21. Timing, ARM-state execution, IRQ handling and
 CPU mode bank switching remain outside this slice.
 
+## ARM execution
+
+`step()` fetches 16-bit Thumb instructions when CPSR.T is set and 32-bit ARM
+instructions otherwise. The stored R15 is always the next fetch address.
+ARM operand reads of PC observe instruction address plus eight bytes, and
+ARM STR of PC writes instruction address plus twelve bytes. ARM BX exchanges
+instruction sets based on the target low bit; other PC writes remain in
+ARM state and align to word boundaries.
+
+ARM condition codes are evaluated before dispatch, including the never-execute
+condition. Supported ARM instructions include data-processing operations with
+rotated immediates and register/immediate barrel shifts, carry/overflow flags,
+B/BL/BX, MUL/MLA, signed and unsigned long multiply, immediate and shifted
+register-offset word/byte transfers, and regular LDM/STM addressing modes.
+The interpreter preserves existing word load rotation and aligned store rules.
+
+The implementation explicitly reports unsupported CPSR/SPSR transfer instructions,
+SWI exception entry, halfword/signed ARM transfers, block transfers that access
+the user register bank, and ARM exception returns requiring SPSR restoration.
+It also rejects register-specified shifts on word/byte transfer offsets and
+unpredictable base-register aliases rather than silently executing them.
+These remain work for issue #20 and independent opcode/oracle coverage in #21.
+
+## Verification
+
+`tests/cpu_arm_data_processing.cpp`, `tests/cpu_arm_control.cpp` and
+`tests/cpu_arm_memory.cpp` execute real ARM opcodes through a Thumb BX
+transition. They cover conditions, shifter boundaries, NZCV, multiply widths,
+PC pipeline operands, relative branches, state exchange, byte/word memory,
+block transfers and precise unsupported-instruction faults. The instruction
+vectors are fixed independently of production encoding helpers. Full
+instruction coverage and independent reference trace comparison remain open.
+
 ## Execution failures
 
 The interpreter does not silently treat unimplemented opcodes as NOPs.
 `ARM7TDMI::execution_fault()` reports a sticky failure kind together with
-the faulting fetch address, 16-bit opcode (when fetched) and CPSR.
+the faulting fetch address, fetched 16-bit Thumb or 32-bit ARM opcode and CPSR.
 
 - UnsupportedThumb: known unsupported instruction forms, including SWI pending exception entry.
 - UndefinedThumb: invalid conditional-branch encodings and empty register lists.
-- UnsupportedArmState: BX entered ARM state; the next step is refused until
-  ARM instruction decoding is implemented.
+- UnsupportedArmOpcode: unsupported ARM instruction, including exception and
+  privileged-state operations that are not yet implemented.
+- UndefinedArm: invalid ARM encodings with no defined architectural behavior.
 - MissingBus: a step was requested before attaching a bus.
 
 The fault is cleared on CPU reset, and stepping again without reset does
