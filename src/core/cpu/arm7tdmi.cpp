@@ -12,7 +12,7 @@ namespace gba {
         fault_ = {};
     }
 
-    void ARM7TDMI::record_fault(FaultKind kind, u32 instructionAddress, u16 instruction) noexcept {
+    void ARM7TDMI::record_fault(FaultKind kind, u32 instructionAddress, u32 instruction) noexcept {
         fault_ = {kind, instructionAddress, instruction, cpsr_};
         regs_[kRegPC] = instructionAddress;
     }
@@ -651,14 +651,15 @@ namespace gba {
             record_fault(FaultKind::MissingBus, fetchAddr, 0U);
             return;
         }
-        if ((cpsr_ & kFlagT) == 0U) {
-            record_fault(FaultKind::UnsupportedArmState, fetchAddr, 0U);
-            return;
+        if ((cpsr_ & kFlagT) != 0U) {
+            const u16 instruction = bus_->read16(fetchAddr);
+            regs_[kRegPC] = fetchAddr + 2U;
+            execute_thumb(instruction, fetchAddr);
+        } else {
+            const u32 instruction = bus_->read32(fetchAddr);
+            regs_[kRegPC] = fetchAddr + 4U;
+            execute_arm(instruction, fetchAddr);
         }
-
-        const u16 instruction = bus_->read16(fetchAddr);
-        regs_[kRegPC] = fetchAddr + 2U;
-        execute_thumb(instruction, fetchAddr);
     }
 
     void ARM7TDMI::execute_thumb(u16 instruction, u32 instructionAddress) noexcept {

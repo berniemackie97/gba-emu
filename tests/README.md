@@ -238,3 +238,13 @@ TEST(ComponentName, FeatureDescription) {
 `cpu_thumb_register_alu.cpp` tests all sixteen register ALU encodings, shift counts at 0/32/33 and low-byte masking, ADC/SBC carry and overflow, and status-bit preservation. `cpu_thumb_multiple_transfer.cpp` covers sparse multiple load/store lists, included-base writeback and empty-list ARMv4T behavior. `cpu_thumb_long_branch.cpp` tests both BL halves, signed offsets, return via BX, architectural PC operands and reserved BX encodings.
 
 The executable CPU still lacks SWI exception entry and ARM-mode execution. The authoritative behavioral scope and limitations are in [CPU.md](../docs/CPU.md); issue #21 tracks independent oracle testing and the complete decoder coverage matrix.
+
+### ARM instruction execution
+
+`cpu_arm_data_processing.cpp` checks ARM conditions, ALU arithmetic, shifter
+edge cases, multiply and Thumb/ARM transitions. `cpu_arm_control.cpp` verifies
+PC pipeline offsets, B/BL control flow and diagnostic faults. `cpu_arm_memory.cpp`
+covers word/byte transfers, register offset shifts, writeback and block transfers.
+These tests use fixed ARMv4T instruction encodings and `support/arm_program.h`
+for the shared Thumb-to-ARM entry path. SPSR/banked-mode exception handling
+remains outstanding in issue #20.
