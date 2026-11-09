@@ -51,11 +51,30 @@ address plus four, aligned to four bytes. SP-relative offsets and SP
 adjustment use the specified scaled unsigned immediate with 32-bit
 wraparound. Relative address arithmetic does not alter NZCV.
 
-The remaining Thumb ALU operations, multiple transfer, long branch
-with link and software interrupts still require implementation and
-independent conformance tests in issue #19. ARM-state instruction
-execution and exception modes remain in issue #20; the complete
-opcode coverage and independent oracle gate remains in issue #21.
+All sixteen Thumb register-ALU operation encodings are dispatched, including
+register-controlled shifts, ADC/SBC, TST, NEG, CMP/CMN and MUL. The register
+shift amount uses the low byte, with separate carry behavior for zero,
+32 and larger shift counts. MUL updates N/Z; its C output is
+architecturally unspecified and is not used as a conformance assertion.
+
+Format 15 LDMIA/STMIA transfers selected low registers in increasing
+address order. With the base in the list, LDM retains the loaded base
+instead of applying writeback; STM stores the old base when the base is
+the first selected register, and otherwise stores the final base.
+The ARMv4T empty-list behavior transfers PC and advances the base by
+64 bytes. All these instructions preserve CPSR flags.
+
+Format 19 BL consists of two halfwords. The first computes a signed,
+high-offset LR intermediate from instruction address plus four; the
+second branches using the low offset and records the Thumb return address
+in LR. High-register instructions read PC as instruction address plus four;
+high-register writes to PC align to halfwords and preserve Thumb state.
+BX uses the same architectural PC operand and rejects reserved encoding bits.
+
+Software interrupt entry still requires the exception-mode implementation
+in issue #20. Full opcode inventory and independent reference vectors are
+tracked in issue #21. Timing, ARM-state execution, IRQ handling and
+CPU mode bank switching remain outside this slice.
 
 ## Execution failures
 
@@ -63,7 +82,7 @@ The interpreter does not silently treat unimplemented opcodes as NOPs.
 `ARM7TDMI::execution_fault()` reports a sticky failure kind together with
 the faulting fetch address, 16-bit opcode (when fetched) and CPSR.
 
-- UnsupportedThumb: known unsupported instruction forms, including SWI.
+- UnsupportedThumb: known unsupported instruction forms, including SWI pending exception entry.
 - UndefinedThumb: invalid conditional-branch encodings and empty register lists.
 - UnsupportedArmState: BX entered ARM state; the next step is refused until
   ARM instruction decoding is implemented.
@@ -88,6 +107,12 @@ transfers and signed/unaligned halfword behavior with fixed expected values.
 `tests/cpu_thumb_memory_address.cpp` checks immediate halfword, SP-relative
 word, aligned PC address, signed SP adjustment and a generated cartridge
 program.
+`tests/cpu_thumb_register_alu.cpp` checks all register ALU opcodes, shift
+boundaries, carry/borrow overflow and preservation of condition flags.
+`tests/cpu_thumb_multiple_transfer.cpp` verifies LDM/STM order, writeback,
+empty lists, base alignment and a generated cartridge program.
+`tests/cpu_thumb_long_branch.cpp` verifies BL sign extension and returns,
+high-register PC semantics and invalid BX encodings.
 
 Instruction encodings and odd-address rules are cross-checked with
 [GBATEK's Thumb instruction formats and ARM CPU memory alignment reference](https://rust-console.github.io/gbatek-gbaonly/).
