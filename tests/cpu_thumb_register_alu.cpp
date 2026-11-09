@@ -154,7 +154,7 @@ TEST(ThumbRegisterAlu, CarryBorrowOverflowAndLogicalFlagPreservation) {
     EXPECT_EQ(cpu.debug_reg(0), 0U);
     EXPECT_EQ(cpu.debug_cpsr() & kNzcv, 0x70000000U);
 
-    execute(bus, cpu, alu(2, 0U, 0U), 1U, 0U, true);
+    execute(bus, cpu, alu(2, 0U, 0U), 0x80000001U, 0U, true);
     EXPECT_EQ(cpu.debug_reg(0), 1U);
     EXPECT_NE(cpu.debug_cpsr() & ARM7TDMI::kFlagC, 0U);
 }
