@@ -27,7 +27,8 @@ namespace gba {
         const u32 base = arm_register(rn);
         const u32 offset = registerOffset
             ? arm_shift(arm_register(instruction & 15U),
-                        (instruction >> 5U) & 3U, (instruction >> 7U) & 31U, false).value
+                        static_cast<ShiftKind>((instruction >> 5U) & 3U),
+                        (instruction >> 7U) & 31U, false).value
             : (instruction & 0xFFFU);
         const u32 adjusted = increment ? base + offset : base - offset;
         const u32 address = preIndex ? adjusted : base;

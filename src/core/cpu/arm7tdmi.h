@@ -108,7 +108,8 @@ namespace gba {
             bool overflow;
         };
         [[nodiscard]] auto arm_operand2(u32 instruction) const noexcept -> ArmOperand;
-        [[nodiscard]] auto arm_shift(u32 value, u32 kind, u32 amount,
+        enum class ShiftKind : u8 { Lsl, Lsr, Asr, Ror };
+        [[nodiscard]] auto arm_shift(u32 value, ShiftKind kind, u32 amount,
                                      bool byRegister) const noexcept -> ArmOperand;
         [[nodiscard]] auto arm_register(u32 index, bool shiftedRm = false) const noexcept -> u32;
         [[nodiscard]] static auto add_with_carry(u32 left, u32 right, bool carry) noexcept -> ArithmeticResult;
