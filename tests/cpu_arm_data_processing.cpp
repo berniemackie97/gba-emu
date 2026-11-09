@@ -81,6 +81,71 @@ namespace {
         }
     }
 
+    TEST(ArmExecution, AllSixteenDataProcessingOpcodesHonorFlagsAndDestinationRules) {
+        struct Vector {
+            std::uint32_t instruction;
+            std::uint32_t result;
+            std::uint32_t flags;
+            bool writes;
+        };
+        constexpr std::array<Vector, 16> vectors{{
+            {0xE0112004U, 0U, 0x60000000U, true},          // ANDS
+            {0xE0312004U, 0x80000001U, 0xA0000000U, true}, // EORS
+            {0xE0512004U, 0x7FFFFFFFU, 0x30000000U, true}, // SUBS
+            {0xE0712004U, 0x80000001U, 0x90000000U, true}, // RSBS
+            {0xE0912004U, 0x80000001U, 0x80000000U, true}, // ADDS
+            {0xE0B12004U, 0x80000002U, 0x80000000U, true}, // ADCS
+            {0xE0D12004U, 0x7FFFFFFFU, 0x30000000U, true}, // SBCS
+            {0xE0F12004U, 0x80000001U, 0x90000000U, true}, // RSCS
+            {0xE1112004U, 0U, 0x60000000U, false},         // TST
+            {0xE1312004U, 0x80000001U, 0xA0000000U, false}, // TEQ
+            {0xE1512004U, 0x7FFFFFFFU, 0x30000000U, false}, // CMP
+            {0xE1712004U, 0x80000001U, 0x80000000U, false}, // CMN
+            {0xE1912004U, 0x80000001U, 0xA0000000U, true}, // ORRS
+            {0xE1B12004U, 1U, 0x20000000U, true},          // MOVS
+            {0xE1D12004U, 0x80000000U, 0xA0000000U, true}, // BICS
+            {0xE1F12004U, 0xFFFFFFFEU, 0xA0000000U, true} // MVNS
+        }};
+
+        Bus bus;
+        bus.reset();
+        ARM7TDMI cpu;
+        cpu.attach(bus);
+        for (const auto &v : vectors) {
+            SCOPED_TRACE(v.instruction);
+            enter_arm(bus, cpu, true);
+            cpu.debug_set_reg(1, 0x80000000U);
+            cpu.debug_set_reg(2, 0x12345678U);
+            cpu.debug_set_reg(4, 1U);
+            bus.write32(kArmEntry, v.instruction);
+            cpu.step();
+            ASSERT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
+            EXPECT_EQ(cpu.debug_reg(2), v.writes ? v.result : 0x12345678U);
+            constexpr std::uint32_t nzcv = ARM7TDMI::kFlagN | ARM7TDMI::kFlagZ |
+                ARM7TDMI::kFlagC | ARM7TDMI::kFlagV;
+            EXPECT_EQ(cpu.debug_cpsr() & nzcv, v.flags);
+        }
+    }
+
+    TEST(ArmExecution, RotatedImmediateUpdatesCarryWhileUnrotatedPreservesIt) {
+        Bus bus;
+        bus.reset();
+        ARM7TDMI cpu;
+        cpu.attach(bus);
+        enter_arm(bus, cpu, true);
+        bus.write32(kArmEntry, 0xE3B02102U); // MOVS r2,#0x80000000
+        bus.write32(kArmEntry + 4U, 0xE3B03001U); // MOVS r3,#1
+        cpu.step();
+        EXPECT_EQ(cpu.debug_reg(2), 0x80000000U);
+        EXPECT_NE(cpu.debug_cpsr() & ARM7TDMI::kFlagC, 0U);
+        EXPECT_NE(cpu.debug_cpsr() & ARM7TDMI::kFlagN, 0U);
+        cpu.step();
+        EXPECT_EQ(cpu.debug_reg(3), 1U);
+        EXPECT_NE(cpu.debug_cpsr() & ARM7TDMI::kFlagC, 0U);
+        EXPECT_EQ(cpu.debug_cpsr() & ARM7TDMI::kFlagN, 0U);
+        EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
+    }
+
     TEST(ArmExecution, ShifterBoundaryVectorsFollowArmv4TCarries) {
         struct Vector {
             std::uint32_t opcode;
