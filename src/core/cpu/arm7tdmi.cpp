@@ -298,58 +298,6 @@ namespace gba {
         set_sub_cv(srcValue, imm3, result);
     }
 
-    // -------------------------- Thumb Format 4: ALU operations --------------------------
-
-    // 0100000000 AND Rd, Rs - Bitwise AND
-    void ARM7TDMI::exec_and(u16 insn) noexcept {
-        const u32 srcReg = (insn >> 3U) & 0x7U;
-        const u32 destReg = insn & 0x7U;
-        const u32 result = regs_.at(destReg) & regs_.at(srcReg);
-        regs_.at(destReg) = result;
-        set_nz(result);
-        // C and V unaffected
-    }
-
-    // 0100000001 EOR Rd, Rs - Bitwise Exclusive OR
-    void ARM7TDMI::exec_eor(u16 insn) noexcept {
-        const u32 srcReg = (insn >> 3U) & 0x7U;
-        const u32 destReg = insn & 0x7U;
-        const u32 result = regs_.at(destReg) ^ regs_.at(srcReg);
-        regs_.at(destReg) = result;
-        set_nz(result);
-        // C and V unaffected
-    }
-
-    // 0100001100 ORR Rd, Rs - Bitwise OR
-    void ARM7TDMI::exec_orr(u16 insn) noexcept {
-        const u32 srcReg = (insn >> 3U) & 0x7U;
-        const u32 destReg = insn & 0x7U;
-        const u32 result = regs_.at(destReg) | regs_.at(srcReg);
-        regs_.at(destReg) = result;
-        set_nz(result);
-        // C and V unaffected
-    }
-
-    // 0100001110 BIC Rd, Rs - Bit Clear (AND NOT)
-    void ARM7TDMI::exec_bic(u16 insn) noexcept {
-        const u32 srcReg = (insn >> 3U) & 0x7U;
-        const u32 destReg = insn & 0x7U;
-        const u32 result = regs_.at(destReg) & ~regs_.at(srcReg);
-        regs_.at(destReg) = result;
-        set_nz(result);
-        // C and V unaffected
-    }
-
-    // 0100001111 MVN Rd, Rs - Move NOT
-    void ARM7TDMI::exec_mvn(u16 insn) noexcept {
-        const u32 srcReg = (insn >> 3U) & 0x7U;
-        const u32 destReg = insn & 0x7U;
-        const u32 result = ~regs_.at(srcReg);
-        regs_.at(destReg) = result;
-        set_nz(result);
-        // C and V unaffected
-    }
-
     // -------------------------- Thumb Format 5: High register ops / BX --------------------------
 
     // 01000100 ADD Rd/Hd, Rs/Hs
@@ -363,12 +311,11 @@ namespace gba {
         const u32 destReg = destRegLow | (h1 << 3U); // 0..15
         const u32 srcReg = srcRegLow | (h2 << 3U);   // 0..15
 
-        const u32 destValue = regs_.at(destReg);
-        const u32 srcValue = regs_.at(srcReg);
+        const u32 destValue = read_thumb_register(destReg);
+        const u32 srcValue = read_thumb_register(srcReg);
         const u32 result = destValue + srcValue;
 
-        regs_.at(destReg) = result;
-        // Flags are NOT affected by ADD (high register form)
+        regs_.at(destReg) = destReg == kRegPC ? result & ~u32{1} : result;
     }
 
     // 01000101 CMP Rd/Hd, Rs/Hs
@@ -381,8 +328,8 @@ namespace gba {
         const u32 destReg = destRegLow | (h1 << 3U);
         const u32 srcReg = srcRegLow | (h2 << 3U);
 
-        const u32 destValue = regs_.at(destReg);
-        const u32 srcValue = regs_.at(srcReg);
+        const u32 destValue = read_thumb_register(destReg);
+        const u32 srcValue = read_thumb_register(srcReg);
         const u32 result = destValue - srcValue;
 
         // CMP always updates flags
@@ -400,8 +347,8 @@ namespace gba {
         const u32 destReg = destRegLow | (h1 << 3U);
         const u32 srcReg = srcRegLow | (h2 << 3U);
 
-        regs_.at(destReg) = regs_.at(srcReg);
-        // Flags are NOT affected by MOV (high register form)
+        const u32 value = read_thumb_register(srcReg);
+        regs_.at(destReg) = destReg == kRegPC ? value & ~u32{1} : value;
     }
 
     // 01000111 BX Rs/Hs (Branch and Exchange)
@@ -411,7 +358,7 @@ namespace gba {
         const u32 srcRegLow = (insn >> 3U) & 0x7U;
         const u32 srcReg = srcRegLow | (h2 << 3U);
 
-        const u32 targetAddr = regs_.at(srcReg);
+        const u32 targetAddr = read_thumb_register(srcReg);
 
         // Bit 0 of target determines new state: 0=ARM, 1=Thumb
         if ((targetAddr & 0x1U) != 0U) {
@@ -728,6 +675,11 @@ namespace gba {
             return;
         }
 
+        if ((instruction & 0xFF00U) == 0x4700U && (instruction & 0x0087U) != 0U) {
+            record_fault(FaultKind::UndefinedThumb, instructionAddress, instruction);
+            return;
+        }
+
         if ((instruction & 0xF000U) == 0xD000U) {
             const u32 condition = (instruction >> 8U) & 0xFU;
             if (condition == 0xEU) {
@@ -745,12 +697,8 @@ namespace gba {
             u16 pattern;
             void (ARM7TDMI::*handler)(u16) noexcept;
         };
-        static constexpr std::array<DecoderEntry, 31> kDecoder{{
-            {0xFFC0U, 0x4000U, &ARM7TDMI::exec_and},
-            {0xFFC0U, 0x4040U, &ARM7TDMI::exec_eor},
-            {0xFFC0U, 0x4300U, &ARM7TDMI::exec_orr},
-            {0xFFC0U, 0x4380U, &ARM7TDMI::exec_bic},
-            {0xFFC0U, 0x43C0U, &ARM7TDMI::exec_mvn},
+        static constexpr std::array<DecoderEntry, 29> kDecoder{{
+            {0xFC00U, 0x4000U, &ARM7TDMI::exec_alu_register},
             {0xFF00U, 0x4400U, &ARM7TDMI::exec_add_high},
             {0xFF00U, 0x4500U, &ARM7TDMI::exec_cmp_high},
             {0xFF00U, 0x4600U, &ARM7TDMI::exec_mov_high},
@@ -768,6 +716,8 @@ namespace gba {
             {0xF000U, 0x8000U, &ARM7TDMI::exec_memory_halfword},
             {0xF000U, 0x9000U, &ARM7TDMI::exec_memory_stack},
             {0xF000U, 0xA000U, &ARM7TDMI::exec_relative_address},
+            {0xF000U, 0xC000U, &ARM7TDMI::exec_multiple_transfer},
+            {0xF000U, 0xF000U, &ARM7TDMI::exec_long_branch},
             {0xFF00U, 0xB000U, &ARM7TDMI::exec_adjust_stack},
             {0xF800U, 0x6000U, &ARM7TDMI::exec_str_imm_w},
             {0xF800U, 0x6800U, &ARM7TDMI::exec_ldr_imm_w},

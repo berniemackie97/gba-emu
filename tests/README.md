@@ -147,7 +147,7 @@ ctest --preset default --output-on-failure --verbose
 
 ## Coverage Goals
 
-### Current Coverage (Implemented)
+### Earlier baseline (not the current opcode inventory)
 - ✅ Thumb MOV/ADD/SUB immediate (Format 3)
 - ✅ Thumb branch (Format 18)
 - ✅ Thumb LDR/STR word and byte (Format 7, 9)
@@ -232,3 +232,9 @@ TEST(ComponentName, FeatureDescription) {
     EXPECT_EQ(bus.read8(kTestAddress), kTestValue);
 }
 ```
+
+### R1 CPU extensions
+
+`cpu_thumb_register_alu.cpp` tests all sixteen register ALU encodings, shift counts at 0/32/33 and low-byte masking, ADC/SBC carry and overflow, and status-bit preservation. `cpu_thumb_multiple_transfer.cpp` covers sparse multiple load/store lists, included-base writeback and empty-list ARMv4T behavior. `cpu_thumb_long_branch.cpp` tests both BL halves, signed offsets, return via BX, architectural PC operands and reserved BX encodings.
+
+The executable CPU still lacks SWI exception entry and ARM-mode execution. The authoritative behavioral scope and limitations are in [CPU.md](../docs/CPU.md); issue #21 tracks independent oracle testing and the complete decoder coverage matrix.
