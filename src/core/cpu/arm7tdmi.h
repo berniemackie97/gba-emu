@@ -41,7 +41,8 @@ namespace gba {
             MissingBus,
             UnsupportedThumb,
             UndefinedThumb,
-            UnsupportedArmState
+            UnsupportedArmOpcode,
+            UndefinedArm
         };
 
         struct ExecutionFault {
@@ -56,7 +57,7 @@ namespace gba {
         void attach(Bus &bus) noexcept { bus_ = &bus; }
         void reset() noexcept;
 
-        void step() noexcept; // execute one Thumb16
+        void step() noexcept;
 
         // -------- Debug/test hooks --------
         void debug_set_program_counter(u32 addr) noexcept { regs_[kRegPC] = addr & ~u32{1}; }
@@ -89,8 +90,29 @@ namespace gba {
         [[nodiscard]] auto read_thumb_register(u32 index) const noexcept -> u32 {
             return index == kRegPC ? thumb_pc() : regs_.at(index);
         }
-        void record_fault(FaultKind kind, u32 instructionAddress, u16 instruction) noexcept;
+        void record_fault(FaultKind kind, u32 instructionAddress, u32 instruction) noexcept;
         void execute_thumb(u16 instruction, u32 instructionAddress) noexcept;
+        void execute_arm(u32 instruction, u32 instructionAddress) noexcept;
+        void exec_arm_data_processing(u32 instruction, u32 instructionAddress) noexcept;
+        void exec_arm_single_transfer(u32 instruction, u32 instructionAddress) noexcept;
+        void exec_arm_block_transfer(u32 instruction, u32 instructionAddress) noexcept;
+        void exec_arm_multiply(u32 instruction, u32 instructionAddress) noexcept;
+
+        struct ArmOperand {
+            u32 value;
+            bool carry;
+        };
+        struct ArithmeticResult {
+            u32 value;
+            bool carry;
+            bool overflow;
+        };
+        [[nodiscard]] auto arm_operand2(u32 instruction) const noexcept -> ArmOperand;
+        [[nodiscard]] auto arm_shift(u32 value, u32 kind, u32 amount,
+                                     bool byRegister) const noexcept -> ArmOperand;
+        [[nodiscard]] auto arm_register(u32 index, bool shiftedRm = false) const noexcept -> u32;
+        [[nodiscard]] static auto add_with_carry(u32 left, u32 right, bool carry) noexcept -> ArithmeticResult;
+        [[nodiscard]] auto arm_condition_passed(u32 condition) const noexcept -> bool;
 
         void set_nz(u32 result) noexcept;
         void set_add_cv(u32 augend, u32 addend, u32 result) noexcept;

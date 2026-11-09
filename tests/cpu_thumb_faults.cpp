@@ -84,7 +84,7 @@ TEST(CpuFault, ValidHighRegisterMoveIsNotAnUnsupportedOpcode) {
     EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
 }
 
-TEST(CpuFault, ArmStateTransitionStopsBeforeArmInstructionIsDecodedAsThumb) {
+TEST(CpuFault, ArmStateTransitionFetchesAndReportsUnsupportedArmOpcode) {
     constexpr std::uint32_t base = MMU::IWRAM_BASE;
     constexpr std::uint32_t target = MMU::IWRAM_BASE + 0x100U;
     Bus bus;
@@ -104,9 +104,9 @@ TEST(CpuFault, ArmStateTransitionStopsBeforeArmInstructionIsDecodedAsThumb) {
 
     cpu.step();
     const auto &fault = cpu.execution_fault();
-    EXPECT_EQ(fault.kind, ARM7TDMI::FaultKind::UnsupportedArmState);
+    EXPECT_EQ(fault.kind, ARM7TDMI::FaultKind::UnsupportedArmOpcode);
     EXPECT_EQ(fault.pc, target);
-    EXPECT_EQ(fault.opcode, 0U);
+    EXPECT_EQ(fault.opcode, 0x00002107U);
     EXPECT_EQ(fault.cpsr & ARM7TDMI::kFlagT, 0U);
     EXPECT_EQ(cpu.debug_pc(), target);
     EXPECT_EQ(cpu.debug_reg(1), 0U);
