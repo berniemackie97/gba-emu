@@ -136,6 +136,7 @@ namespace {
         EXPECT_EQ(cpu.debug_reg(3), 42U);
         cpu.step();
         EXPECT_EQ(cpu.debug_reg(3), 47U);
+        EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
 
         enter_arm(bus, cpu);
         cpu.debug_set_reg(1, 0xFFFFFFFFU);

@@ -166,7 +166,7 @@ namespace gba {
         }
 
         if (!longResult) {
-            if ((instruction & 0x00400000U) == 0U && rn != 0U) {
+            if ((instruction & 0x00200000U) == 0U && rn != 0U) {
                 record_fault(FaultKind::UndefinedArm, instructionAddress, instruction);
                 return;
             }
