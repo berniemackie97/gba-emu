@@ -90,7 +90,7 @@ TEST(CpuFault, ArmStateTransitionFetchesAndReportsUnsupportedArmOpcode) {
     Bus bus;
     bus.reset();
     bus.write16(base, 0x4700U); // BX r0
-    bus.write16(target, 0x2107U);
+    bus.write32(target, 0xEF000000U); // SWI remains unsupported until exception modes
 
     ARM7TDMI cpu;
     cpu.attach(bus);
@@ -106,7 +106,7 @@ TEST(CpuFault, ArmStateTransitionFetchesAndReportsUnsupportedArmOpcode) {
     const auto &fault = cpu.execution_fault();
     EXPECT_EQ(fault.kind, ARM7TDMI::FaultKind::UnsupportedArmOpcode);
     EXPECT_EQ(fault.pc, target);
-    EXPECT_EQ(fault.opcode, 0x00002107U);
+    EXPECT_EQ(fault.opcode, 0xEF000000U);
     EXPECT_EQ(fault.cpsr & ARM7TDMI::kFlagT, 0U);
     EXPECT_EQ(cpu.debug_pc(), target);
     EXPECT_EQ(cpu.debug_reg(1), 0U);

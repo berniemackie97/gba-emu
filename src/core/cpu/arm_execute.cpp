@@ -108,16 +108,12 @@ namespace gba {
         const u32 left = arm_register((instruction >> 16U) & 15U);
         const ArmOperand right = arm_operand2(instruction);
         const bool carryIn = (cpsr_ & kFlagC) != 0U;
-        const auto arithmetic = [carryIn](u32 a, u32 b, bool c) {
-            return add_with_carry(a, b, c);
-        };
-
         u32 result = 0U;
         bool carry = right.carry;
         bool overflow = (cpsr_ & kFlagV) != 0U;
         bool arithmeticFlags = false;
         auto compute = [&](u32 a, u32 b, bool cin) {
-            const ArithmeticResult values = arithmetic(a, b, cin);
+            const ArithmeticResult values = add_with_carry(a, b, cin);
             result = values.value;
             carry = values.carry;
             overflow = values.overflow;
