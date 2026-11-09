@@ -86,6 +86,9 @@ namespace gba {
         }
 
         [[nodiscard]] auto thumb_pc() const noexcept -> u32 { return regs_[kRegPC] + 2U; }
+        [[nodiscard]] auto read_thumb_register(u32 index) const noexcept -> u32 {
+            return index == kRegPC ? thumb_pc() : regs_.at(index);
+        }
         void record_fault(FaultKind kind, u32 instructionAddress, u16 instruction) noexcept;
         void execute_thumb(u16 instruction, u32 instructionAddress) noexcept;
 
@@ -111,12 +114,8 @@ namespace gba {
         void exec_add_imm3(u16 insn) noexcept; // 0001110 ADD Rd, Rs, #imm3
         void exec_sub_imm3(u16 insn) noexcept; // 0001111 SUB Rd, Rs, #imm3
 
-        // Format 4: ALU operations
-        void exec_and(u16 insn) noexcept;      // 0100000000 AND Rd, Rs
-        void exec_eor(u16 insn) noexcept;      // 0100000001 EOR Rd, Rs
-        void exec_orr(u16 insn) noexcept;      // 0100001100 ORR Rd, Rs
-        void exec_bic(u16 insn) noexcept;      // 0100001110 BIC Rd, Rs
-        void exec_mvn(u16 insn) noexcept;      // 0100001111 MVN Rd, Rs
+        // Format 4: register ALU operations
+        void exec_alu_register(u16 insn) noexcept;
 
         // Format 5: High register operations / Branch exchange
         void exec_add_high(u16 insn) noexcept; // 01000100 ADD Rd/Hd, Rs/Hs
@@ -130,6 +129,8 @@ namespace gba {
 
         // Format 16: Conditional branch
         void exec_bcond(u16 insn) noexcept;    // 1101 cond imm8
+        void exec_multiple_transfer(u16 insn) noexcept;
+        void exec_long_branch(u16 insn) noexcept;
 
         // ----- BIT HELPERS -----
         // Rotate-right by 'amount' (mod 32). Second param is a byte on purpose

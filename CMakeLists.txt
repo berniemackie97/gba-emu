@@ -10,6 +10,8 @@ add_library(gba_core
     src/core/content/file_image.cpp
     src/core/bus/bus.cpp
     src/core/cpu/arm7tdmi.cpp
+    src/core/cpu/thumb_alu.cpp
+    src/core/cpu/thumb_transfer.cpp
     src/core/mmu/mmu.cpp
     src/core/io/io.cpp
 )
