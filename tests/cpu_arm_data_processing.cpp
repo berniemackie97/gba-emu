@@ -150,6 +150,17 @@ namespace {
         EXPECT_EQ(cpu.debug_reg(3), 0xFFFFFFFEU);
         EXPECT_EQ(cpu.debug_reg(4), 0xFFFFFFFFU);
         EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
+
+        enter_arm(bus, cpu);
+        cpu.debug_set_reg(1, 0xFFFFFFFFU);
+        cpu.debug_set_reg(2, 2U);
+        cpu.debug_set_reg(3, 10U);
+        cpu.debug_set_reg(4, 1U);
+        bus.write32(kArmEntry, 0xE0A43291U); // UMLAL r3,r4,r1,r2
+        cpu.step();
+        EXPECT_EQ(cpu.debug_reg(3), 8U);
+        EXPECT_EQ(cpu.debug_reg(4), 3U);
+        EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::None);
     }
 
 } // namespace

@@ -95,8 +95,9 @@ The interpreter preserves existing word load rotation and aligned store rules.
 The implementation explicitly reports unsupported CPSR/SPSR transfer instructions,
 SWI exception entry, halfword/signed ARM transfers, block transfers that access
 the user register bank, and ARM exception returns requiring SPSR restoration.
-It also rejects register-specified shifts on word/byte transfer offsets and
-unpredictable base-register aliases rather than silently executing them.
+It also rejects register-specified shifts on word/byte transfer offsets,
+privileged post-indexed memory accesses, and unpredictable base-register aliases
+rather than silently executing them.
 These remain work for issue #20 and independent opcode/oracle coverage in #21.
 
 ## Verification

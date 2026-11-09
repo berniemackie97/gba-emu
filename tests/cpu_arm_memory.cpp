@@ -131,6 +131,23 @@ namespace {
         EXPECT_EQ(cpu.debug_cpsr() & ARM7TDMI::kFlagT, 0U);
     }
 
+    TEST(ArmMemory, PrivilegedPostIndexedTransferDoesNotSilentlyUseNormalBusAccess) {
+        Bus bus;
+        bus.reset();
+        ARM7TDMI cpu;
+        cpu.attach(bus);
+        enter_arm(bus, cpu);
+        cpu.debug_set_reg(4, kArmData);
+        cpu.debug_set_reg(1, 0xAABBCCDDU);
+        bus.write32(kArmEntry, 0xE4A41004U); // STRT r1,[r4],#4
+        bus.write32(kArmData, 0x11111111U);
+        cpu.step();
+        EXPECT_EQ(cpu.execution_fault().kind, ARM7TDMI::FaultKind::UnsupportedArmOpcode);
+        EXPECT_EQ(cpu.debug_reg(4), kArmData);
+        EXPECT_EQ(bus.read32(kArmData), 0x11111111U);
+        EXPECT_EQ(cpu.debug_pc(), kArmEntry);
+    }
+
     TEST(ArmMemory, UnpredictableBaseAliasIsRejectedBeforeMemoryMutation) {
         Bus bus;
         bus.reset();

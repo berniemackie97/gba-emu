@@ -16,6 +16,7 @@ namespace gba {
         const u32 rd = (instruction >> 12U) & 15U;
 
         if ((registerOffset && (instruction & 0x10U) != 0U) ||
+            (!preIndex && (instruction & 0x00200000U) != 0U) ||
             (rn == kRegPC && writeback) ||
             (load && writeback && rn == rd) ||
             (byte && rd == kRegPC)) {
